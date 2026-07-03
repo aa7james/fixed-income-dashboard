@@ -152,3 +152,25 @@ export function categoriseColumns(columns) {
   // Remove empty groups
   return Object.fromEntries(Object.entries(groups).filter(([, cols]) => cols.length > 0));
 }
+
+// Categorise columns using the instruments table from Supabase
+export function categoriseFromInstruments(columns, instruments) {
+  const lookup = {};
+  instruments.forEach(inst => { lookup[inst.name] = inst; });
+
+  const groups = {};
+  for (const col of columns) {
+    const inst = lookup[col.name];
+    const category = inst ? inst.category : 'Other';
+    if (!groups[category]) groups[category] = [];
+    groups[category].push({
+      ...col,
+      display_label: inst?.display_label || col.name,
+      maturity_date: inst?.maturity_date || null,
+      coupon: inst?.coupon || null,
+      bloomberg_ticker: inst?.bloomberg_ticker || null,
+    });
+  }
+
+  return Object.fromEntries(Object.entries(groups).filter(([, cols]) => cols.length > 0));
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { parseBloombergCSV, categoriseColumns } from './utils/parseCSV';
-import { loadFromSupabase } from './utils/supabase';
+import { parseBloombergCSV } from './utils/parseCSV';
+import { loadFromSupabase, loadInstruments } from './utils/supabase';
+import { categoriseFromInstruments, categoriseColumns } from './utils/parseCSV';
 import LatestRates from './components/LatestRates';
 import YieldCurve from './components/YieldCurve';
 import RateHistory from './components/RateHistory';
@@ -12,32 +13,37 @@ const TABS = ['Latest Rates', 'Yield Curve', 'Rate History'];
 export default function App() {
   const [data, setData] = useState(null);
   const [groups, setGroups] = useState({});
+  const [instruments, setInstruments] = useState([]);
   const [activeTab, setActiveTab] = useState('Latest Rates');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
 
-  const applyData = useCallback((parsed) => {
+  const applyData = useCallback((parsed, instrumentList) => {
     setData(parsed);
-    setGroups(categoriseColumns(parsed.columns));
+    if (instrumentList && instrumentList.length > 0) {
+      setGroups(categoriseFromInstruments(parsed.columns, instrumentList));
+    } else {
+      setGroups(categoriseColumns(parsed.columns));
+    }
     setError(null);
   }, []);
 
   const handleCSV = useCallback((text) => {
     try {
-      applyData(parseBloombergCSV(text));
+      applyData(parseBloombergCSV(text), instruments);
     } catch (e) {
       setError('Could not parse the CSV file. Please check the format.');
     }
-  }, [applyData]);
+  }, [applyData, instruments]);
 
-  // Auto-load from Supabase on open
   useEffect(() => {
     setLoadingMsg('Connecting to database…');
-    loadFromSupabase()
-      .then(parsed => {
+    Promise.all([loadFromSupabase(), loadInstruments()])
+      .then(([parsed, instrumentList]) => {
+        setInstruments(instrumentList);
         if (parsed.dataRows.length > 0) {
-          applyData(parsed);
+          applyData(parsed, instrumentList);
         } else {
           setError('Database is empty — use "Load CSV" to import data.');
         }
@@ -92,7 +98,7 @@ export default function App() {
 
           <main className={styles.main}>
             {activeTab === 'Latest Rates' && <LatestRates data={data} groups={groups} />}
-            {activeTab === 'Yield Curve'  && <YieldCurve  data={data} />}
+            {activeTab === 'Yield Curve'  && <YieldCurve  data={data} instruments={instruments} />}
             {activeTab === 'Rate History' && <RateHistory data={data} groups={groups} />}
           </main>
         </>

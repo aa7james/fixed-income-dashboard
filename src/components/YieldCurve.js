@@ -5,150 +5,86 @@ import {
 } from 'recharts';
 import styles from './YieldCurve.module.css';
 
-// Hardcoded maturity dates — these never change for SA bonds
-const BOND_MATURITIES = {
-  // Nominal Government Bonds
-  'R2030 Bond':  '2030-01-31',
-  'R213 Bond':   '2031-02-28',
-  'R2032 Bond':  '2032-03-31',
-  'R2033':       '2033-03-31',
-  'R2035 Bond':  '2035-02-28',
-  'R209 Bond':   '2036-03-31',
-  'R2037 Bond':  '2037-01-31',
-  'R2038 Bond':  '2038-03-31',
-  'R2039 Bond':  '2039-03-31',
-  'R2040 Bond':  '2040-01-31',
-  'R2042 Bond':  '2042-03-31',
-  'R214 Bond':   '2041-02-28',
-  'R2044 Bond':  '2044-01-31',
-  'R2048 Bond':  '2048-02-28',
-  'R2053 Bond':  '2053-03-31',
-  // Inflation Linked Bonds
-  'R210 Bond':   '2028-03-31',
-  'R202 Bond':   '2034-01-31',
-  'I2025 Bond':  '2025-01-30',
-  'I2029 Bond':  '2029-03-31',
-  'I2031 Bond':  '2031-01-31',
-  'I2033 Bond':  '2033-03-31',
-  'I2038 Bond':  '2038-01-31',
-  'I2043 Bond':  '2043-01-31',
-  'I2046 Bond':  '2046-03-31',
-  'I2050 Bond':  '2050-12-31',
+// Which categories appear on the yield curve, their colours, and whether on by default
+const CURVE_CATEGORIES = {
+  'Swaps':            { color: '#38bdf8', defaultOn: true  },
+  'Government Bonds': { color: '#4ade80', defaultOn: true  },
+  'Inflation Linked': { color: '#facc15', defaultOn: false },
+  'Fixed Rate NCDs':  { color: '#fb923c', defaultOn: false },
+  'T-Bills':          { color: '#818cf8', defaultOn: false },
+  'SOE / Corporate Bonds': { color: '#f472b6', defaultOn: false },
 };
 
-// Short display labels for bonds
-const BOND_LABELS = {
-  'R2030 Bond': 'R2030', 'R213 Bond': 'R213', 'R2032 Bond': 'R2032',
-  'R2033': 'R2033', 'R2035 Bond': 'R2035', 'R209 Bond': 'R209',
-  'R2037 Bond': 'R2037', 'R2038 Bond': 'R2038', 'R2039 Bond': 'R2039',
-  'R2040 Bond': 'R2040', 'R2042 Bond': 'R2042', 'R214 Bond': 'R214',
-  'R2044 Bond': 'R2044', 'R2048 Bond': 'R2048', 'R2053 Bond': 'R2053',
-  'R210 Bond': 'R210', 'R202 Bond': 'R202',
-  'I2025 Bond': 'I2025', 'I2029 Bond': 'I2029', 'I2031 Bond': 'I2031',
-  'I2033 Bond': 'I2033', 'I2038 Bond': 'I2038', 'I2043 Bond': 'I2043',
-  'I2046 Bond': 'I2046', 'I2050 Bond': 'I2050',
+// Swap tenors — fixed, won't change
+const SWAP_TENORS = {
+  '1 Year SWAP': 1,  '2 Year SWAP': 2,  '3 Year SWAP': 3,
+  '4 Year SWAP': 4,  '5 Year SWAP': 5,  '6 Year SWAP': 6,
+  '7 Year SWAP': 7,  '8 Year SWAP': 8,  '9 Year SWAP': 9,
+  '10 Year SWAP': 10, '12 Year SWAP': 12, '15 Year SWAP': 15,
+  '20 Year SWAP': 20,
 };
 
-const CATEGORIES = {
-  'Swap Curve': {
-    color: '#38bdf8',
-    defaultOn: true,
-    instruments: [
-      { col: '1 Year SWAP',  label: '1Y',  tenor: 1 },
-      { col: '2 Year SWAP',  label: '2Y',  tenor: 2 },
-      { col: '3 Year SWAP',  label: '3Y',  tenor: 3 },
-      { col: '4 Year SWAP',  label: '4Y',  tenor: 4 },
-      { col: '5 Year SWAP',  label: '5Y',  tenor: 5 },
-      { col: '6 Year SWAP',  label: '6Y',  tenor: 6 },
-      { col: '7 Year SWAP',  label: '7Y',  tenor: 7 },
-      { col: '8 Year SWAP',  label: '8Y',  tenor: 8 },
-      { col: '9 Year SWAP',  label: '9Y',  tenor: 9 },
-      { col: '10 Year SWAP', label: '10Y', tenor: 10 },
-      { col: '12 Year SWAP', label: '12Y', tenor: 12 },
-      { col: '15 Year SWAP', label: '15Y', tenor: 15 },
-      { col: '20 Year SWAP', label: '20Y', tenor: 20 },
-    ],
-  },
-  'Government Bonds': {
-    color: '#4ade80',
-    defaultOn: true,
-    bonds: [
-      'R2030 Bond', 'R213 Bond', 'R2032 Bond', 'R2033',
-      'R2035 Bond', 'R209 Bond', 'R2037 Bond', 'R2038 Bond',
-      'R2039 Bond', 'R2040 Bond', 'R2042 Bond', 'R214 Bond', 'R2044 Bond',
-      'R2048 Bond', 'R2053 Bond',
-    ],
-  },
-  'Inflation Linked': {
-    color: '#facc15',
-    defaultOn: false,
-    bonds: ['R210 Bond', 'I2025 Bond', 'I2029 Bond', 'R202 Bond', 'I2031 Bond', 'I2033 Bond', 'I2038 Bond', 'I2043 Bond', 'I2046 Bond', 'I2050 Bond'],
-  },
-  'NCDs': {
-    color: '#fb923c',
-    defaultOn: false,
-    instruments: [
-      { col: '1m Fixed Rate NCD',  label: '1m',  tenor: 1/12 },
-      { col: '2m Fixed Rate NCD',  label: '2m',  tenor: 2/12 },
-      { col: '3m Fixed Rate NCD',  label: '3m',  tenor: 3/12 },
-      { col: '4m Fixed Rate NCD',  label: '4m',  tenor: 4/12 },
-      { col: '5m Fixed Rate NCD',  label: '5m',  tenor: 5/12 },
-      { col: '6m Fixed Rate NCD',  label: '6m',  tenor: 6/12 },
-      { col: '7m Fixed Rate NCD',  label: '7m',  tenor: 7/12 },
-      { col: '8m Fixed Rate NCD',  label: '8m',  tenor: 8/12 },
-      { col: '9m Fixed Rate NCD',  label: '9m',  tenor: 9/12 },
-      { col: '10m Fixed Rate NCD', label: '10m', tenor: 10/12 },
-      { col: '11m Fixed Rate NCD', label: '11m', tenor: 11/12 },
-      { col: '12m Fixed Rate NCD', label: '12m', tenor: 1 },
-      { col: '2y Fixed Rate NCD',  label: '2y',  tenor: 2 },
-      { col: '3y Fixed Rate NCD2', label: '3y',  tenor: 3 },
-    ],
-  },
-  'T-Bills': {
-    color: '#818cf8',
-    defaultOn: false,
-    instruments: [
-      { col: '3m T-Bill',  label: '3m',  tenor: 0.25 },
-      { col: '6m T-Bill',  label: '6m',  tenor: 0.5 },
-      { col: '9m T-Bill',  label: '9m',  tenor: 0.75 },
-      { col: '12m T-Bill', label: '12m', tenor: 1 },
-    ],
-  },
+// NCD tenors
+const NCD_TENORS = {
+  '1m Fixed Rate NCD': 1/12,  '2m Fixed Rate NCD': 2/12,
+  '3m Fixed Rate NCD': 3/12,  '4m Fixed Rate NCD': 4/12,
+  '5m Fixed Rate NCD': 5/12,  '6m Fixed Rate NCD': 6/12,
+  '7m Fixed Rate NCD': 7/12,  '8m Fixed Rate NCD': 8/12,
+  '9m Fixed Rate NCD': 9/12,  '10m Fixed Rate NCD': 10/12,
+  '11m Fixed Rate NCD': 11/12, '12m Fixed Rate NCD': 1,
+  '2y Fixed Rate NCD': 2,      '3y Fixed Rate NCD2': 3,
 };
 
-const DATE_COLORS = ['#e2e8f0', '#fbbf24', '#a78bfa', '#f87171', '#34d399'];
+// T-Bill tenors
+const TBILL_TENORS = {
+  '3m T-Bill': 0.25, '6m T-Bill': 0.5,
+  '9m T-Bill': 0.75, '12m T-Bill': 1,
+};
 
 const TENOR_RANGES = [
-  { label: 'Short Term',  max: 2,   description: '0 – 2 years' },
-  { label: 'Medium Term', max: 10,  description: '0 – 10 years' },
+  { label: 'Short Term',  max: 2,    description: '0 – 2 years' },
+  { label: 'Medium Term', max: 10,   description: '0 – 10 years' },
   { label: 'Full Curve',  max: null, description: 'All maturities' },
 ];
+
+const DATE_COLORS = ['#e2e8f0', '#fbbf24', '#a78bfa', '#f87171', '#34d399'];
 
 function yearsTo(refDate, isoStr) {
   return (new Date(isoStr) - refDate) / (365.25 * 24 * 3600 * 1000);
 }
 
-function buildSeries(category, row, refDate) {
+function buildPoints(catName, row, refDate, instruments) {
   if (!row) return [];
   const points = [];
 
-  if (category.instruments) {
-    for (const { col, label, tenor } of category.instruments) {
+  if (catName === 'Swaps') {
+    for (const [col, tenor] of Object.entries(SWAP_TENORS)) {
       const y = row[col];
       if (y == null) continue;
-      points.push({ x: +tenor.toFixed(4), y: +y.toFixed(4), label });
+      points.push({ x: tenor, y: +y.toFixed(4), label: `${tenor}Y` });
     }
-  }
-
-  if (category.bonds) {
-    for (const col of category.bonds) {
-      const matStr = BOND_MATURITIES[col];
-      if (!matStr) continue;
+  } else if (catName === 'Fixed Rate NCDs') {
+    for (const [col, tenor] of Object.entries(NCD_TENORS)) {
       const y = row[col];
       if (y == null) continue;
-      const x = yearsTo(refDate, matStr);
+      const months = Math.round(tenor * 12);
+      points.push({ x: +tenor.toFixed(4), y: +y.toFixed(4), label: months < 12 ? `${months}m` : `${tenor}y` });
+    }
+  } else if (catName === 'T-Bills') {
+    for (const [col, tenor] of Object.entries(TBILL_TENORS)) {
+      const y = row[col];
+      if (y == null) continue;
+      points.push({ x: tenor, y: +y.toFixed(4), label: `${Math.round(tenor * 12)}m` });
+    }
+  } else {
+    // Bond categories — use maturity_date from instruments table
+    const catInstruments = instruments.filter(i => i.category === catName && i.maturity_date);
+    for (const inst of catInstruments) {
+      const y = row[inst.name];
+      if (y == null) continue;
+      const x = yearsTo(refDate, inst.maturity_date);
       if (x <= 0) continue;
-      points.push({ x: +x.toFixed(2), y: +y.toFixed(4), label: BOND_LABELS[col] || col });
+      points.push({ x: +x.toFixed(2), y: +y.toFixed(4), label: inst.display_label || inst.name });
     }
     points.sort((a, b) => a.x - b.x);
   }
@@ -181,18 +117,17 @@ const CustomDot = (props) => {
 
 function formatTenor(x) {
   if (x < 1) return `${Math.round(x * 12)}m`;
-  if (Number.isInteger(x)) return `${x}y`;
   return `${x}y`;
 }
 
-export default function YieldCurve({ data }) {
+export default function YieldCurve({ data, instruments }) {
   const allDates = data.dataRows.map(r => r.dateStr);
   const latest = data.dataRows[data.dataRows.length - 1];
 
   const [selectedDates, setSelectedDates] = useState([latest?.dateStr].filter(Boolean));
   const [inputDate, setInputDate] = useState('');
   const [activeCategories, setActiveCategories] = useState(
-    () => Object.fromEntries(Object.entries(CATEGORIES).map(([k, v]) => [k, v.defaultOn]))
+    () => Object.fromEntries(Object.entries(CURVE_CATEGORIES).map(([k, v]) => [k, v.defaultOn]))
   );
   const [tenorRange, setTenorRange] = useState('Full Curve');
 
@@ -205,37 +140,32 @@ export default function YieldCurve({ data }) {
   };
 
   const removeDate = (d) => setSelectedDates(prev => prev.filter(x => x !== d));
-
-  const toggleCategory = (cat) => {
-    setActiveCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
-  };
-
+  const toggleCategory = (cat) => setActiveCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
   const fmtDate = (s) => new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  // Build all series: for each active category × each selected date
   const allSeries = useMemo(() => {
     const series = [];
     selectedDates.forEach((dateStr, di) => {
       const row = data.dataRows.find(r => r.dateStr === dateStr);
       const refDate = new Date(dateStr);
       const dateColor = DATE_COLORS[di % DATE_COLORS.length];
-      Object.entries(CATEGORIES).forEach(([catName, cat]) => {
+      Object.entries(CURVE_CATEGORIES).forEach(([catName, cfg]) => {
         if (!activeCategories[catName]) return;
-        const points = buildSeries(cat, row, refDate);
+        const points = buildPoints(catName, row, refDate, instruments);
         if (!points.length) return;
         series.push({
           key: `${catName}__${dateStr}`,
           catName,
           dateStr,
-          color: selectedDates.length === 1 ? cat.color : dateColor,
-          stroke: cat.color,
+          color: selectedDates.length === 1 ? cfg.color : dateColor,
+          stroke: cfg.color,
           data: points,
           label: selectedDates.length === 1 ? catName : `${catName} (${fmtDate(dateStr)})`,
         });
       });
     });
     return series;
-  }, [selectedDates, activeCategories, data.dataRows]);
+  }, [selectedDates, activeCategories, data.dataRows, instruments]);
 
   const activeRange = TENOR_RANGES.find(r => r.label === tenorRange) || TENOR_RANGES[2];
 
@@ -250,7 +180,7 @@ export default function YieldCurve({ data }) {
   const xDomain = useMemo(() => {
     if (activeRange.max) return [0, activeRange.max];
     const all = filteredSeries.flatMap(s => s.data.map(p => p.x));
-    if (!all.length) return [0, 20];
+    if (!all.length) return [0, 30];
     return [0, Math.ceil(Math.max(...all)) + 1];
   }, [filteredSeries, activeRange]);
 
@@ -284,7 +214,7 @@ export default function YieldCurve({ data }) {
 
       {/* Category toggles */}
       <div className={styles.categoryBar}>
-        {Object.entries(CATEGORIES).map(([cat, cfg]) => (
+        {Object.entries(CURVE_CATEGORIES).map(([cat, cfg]) => (
           <button
             key={cat}
             className={`${styles.catBtn} ${activeCategories[cat] ? styles.catBtnOn : ''}`}
@@ -324,7 +254,6 @@ export default function YieldCurve({ data }) {
         )}
       </div>
 
-      {/* Chart */}
       {filteredSeries.length > 0 ? (
         <div className={styles.chartWrap}>
           <ResponsiveContainer width="100%" height={440}>
@@ -349,9 +278,7 @@ export default function YieldCurve({ data }) {
                 width={56}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }}
-              />
+              <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }} />
               {filteredSeries.map(s => (
                 <Scatter
                   key={s.key}
