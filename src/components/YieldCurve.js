@@ -7,12 +7,11 @@ import styles from './YieldCurve.module.css';
 
 // Hardcoded maturity dates — these never change for SA bonds
 const BOND_MATURITIES = {
-  'R210 Bond':   '2028-03-31',
+  // Nominal Government Bonds
   'R2030 Bond':  '2030-01-31',
   'R213 Bond':   '2031-02-28',
   'R2032 Bond':  '2032-03-31',
   'R2033':       '2033-03-31',
-  'R202 Bond':   '2034-01-31',
   'R2035 Bond':  '2035-02-28',
   'R209 Bond':   '2036-03-31',
   'R2037 Bond':  '2037-01-31',
@@ -24,26 +23,30 @@ const BOND_MATURITIES = {
   'R2044 Bond':  '2044-01-31',
   'R2048 Bond':  '2048-02-28',
   'R2053 Bond':  '2053-03-31',
-  'TN27':        '2027-11-14',
-  'TN30':        '2030-10-09',
-  'FRX31':       '2031-02-21',
-  'HWAY34':      '2034-07-31',
-  'ES33':        '2033-09-15',
-  'ES42':        '2042-04-25',
-  'SOAF 5 7/8 06/22/30': '2030-06-22',
+  // Inflation Linked Bonds
+  'R210 Bond':   '2028-03-31',
+  'R202 Bond':   '2034-01-31',
+  'I2025 Bond':  '2025-01-30',
+  'I2029 Bond':  '2029-03-31',
+  'I2031 Bond':  '2031-01-31',
+  'I2033 Bond':  '2033-03-31',
+  'I2038 Bond':  '2038-01-31',
+  'I2043 Bond':  '2043-01-31',
+  'I2046 Bond':  '2046-03-31',
+  'I2050 Bond':  '2050-12-31',
 };
 
 // Short display labels for bonds
 const BOND_LABELS = {
-  'R210 Bond': 'R210', 'R2030 Bond': 'R2030', 'R213 Bond': 'R213',
-  'R2032 Bond': 'R2032', 'R2033': 'R2033', 'R202 Bond': 'R202',
-  'R2035 Bond': 'R2035', 'R209 Bond': 'R209', 'R2037 Bond': 'R2037',
-  'R2038 Bond': 'R2038', 'R2039 Bond': 'R2039', 'R2040 Bond': 'R2040',
-  'R2042 Bond': 'R2042', 'R214 Bond': 'R214', 'R2044 Bond': 'R2044',
-  'R2048 Bond': 'R2048', 'R2053 Bond': 'R2053',
-  'TN27': 'TN27', 'TN30': 'TN30', 'FRX31': 'FRX31',
-  'HWAY34': 'HWAY34', 'ES33': 'ES33', 'ES42': 'ES42',
-  'SOAF 5 7/8 06/22/30': 'SOAF30',
+  'R2030 Bond': 'R2030', 'R213 Bond': 'R213', 'R2032 Bond': 'R2032',
+  'R2033': 'R2033', 'R2035 Bond': 'R2035', 'R209 Bond': 'R209',
+  'R2037 Bond': 'R2037', 'R2038 Bond': 'R2038', 'R2039 Bond': 'R2039',
+  'R2040 Bond': 'R2040', 'R2042 Bond': 'R2042', 'R214 Bond': 'R214',
+  'R2044 Bond': 'R2044', 'R2048 Bond': 'R2048', 'R2053 Bond': 'R2053',
+  'R210 Bond': 'R210', 'R202 Bond': 'R202',
+  'I2025 Bond': 'I2025', 'I2029 Bond': 'I2029', 'I2031 Bond': 'I2031',
+  'I2033 Bond': 'I2033', 'I2038 Bond': 'I2038', 'I2043 Bond': 'I2043',
+  'I2046 Bond': 'I2046', 'I2050 Bond': 'I2050',
 };
 
 const CATEGORIES = {
@@ -79,7 +82,7 @@ const CATEGORIES = {
   'Inflation Linked': {
     color: '#facc15',
     defaultOn: false,
-    bonds: ['R210 Bond', 'R202 Bond'],
+    bonds: ['R210 Bond', 'I2025 Bond', 'I2029 Bond', 'R202 Bond', 'I2031 Bond', 'I2033 Bond', 'I2038 Bond', 'I2043 Bond', 'I2046 Bond', 'I2050 Bond'],
   },
   'NCDs': {
     color: '#fb923c',
@@ -110,11 +113,6 @@ const CATEGORIES = {
       { col: '9m T-Bill',  label: '9m',  tenor: 0.75 },
       { col: '12m T-Bill', label: '12m', tenor: 1 },
     ],
-  },
-  'SOE Bonds': {
-    color: '#f472b6',
-    defaultOn: false,
-    bonds: ['TN27', 'TN30', 'FRX31', 'HWAY34', 'ES33', 'ES42'],
   },
 };
 
