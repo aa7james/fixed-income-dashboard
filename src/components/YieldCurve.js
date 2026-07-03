@@ -70,11 +70,16 @@ const CATEGORIES = {
     color: '#4ade80',
     defaultOn: true,
     bonds: [
-      'R210 Bond', 'R2030 Bond', 'R213 Bond', 'R2032 Bond', 'R2033',
-      'R202 Bond', 'R2035 Bond', 'R209 Bond', 'R2037 Bond', 'R2038 Bond',
+      'R2030 Bond', 'R213 Bond', 'R2032 Bond', 'R2033',
+      'R2035 Bond', 'R209 Bond', 'R2037 Bond', 'R2038 Bond',
       'R2039 Bond', 'R2040 Bond', 'R2042 Bond', 'R214 Bond', 'R2044 Bond',
       'R2048 Bond', 'R2053 Bond',
     ],
+  },
+  'Inflation Linked': {
+    color: '#facc15',
+    defaultOn: false,
+    bonds: ['R210 Bond', 'R202 Bond'],
   },
   'NCDs': {
     color: '#fb923c',
@@ -114,6 +119,12 @@ const CATEGORIES = {
 };
 
 const DATE_COLORS = ['#e2e8f0', '#fbbf24', '#a78bfa', '#f87171', '#34d399'];
+
+const TENOR_RANGES = [
+  { label: 'Short Term',  max: 2,   description: '0 – 2 years' },
+  { label: 'Medium Term', max: 10,  description: '0 – 10 years' },
+  { label: 'Full Curve',  max: null, description: 'All maturities' },
+];
 
 function yearsTo(refDate, isoStr) {
   return (new Date(isoStr) - refDate) / (365.25 * 24 * 3600 * 1000);
@@ -185,6 +196,7 @@ export default function YieldCurve({ data }) {
   const [activeCategories, setActiveCategories] = useState(
     () => Object.fromEntries(Object.entries(CATEGORIES).map(([k, v]) => [k, v.defaultOn]))
   );
+  const [tenorRange, setTenorRange] = useState('Full Curve');
 
   const addDate = () => {
     const match = allDates.find(d => d === inputDate || d.startsWith(inputDate));
@@ -227,24 +239,50 @@ export default function YieldCurve({ data }) {
     return series;
   }, [selectedDates, activeCategories, data.dataRows]);
 
+  const activeRange = TENOR_RANGES.find(r => r.label === tenorRange) || TENOR_RANGES[2];
+
+  const filteredSeries = useMemo(() => {
+    if (!activeRange.max) return allSeries;
+    return allSeries.map(s => ({
+      ...s,
+      data: s.data.filter(p => p.x <= activeRange.max),
+    })).filter(s => s.data.length > 0);
+  }, [allSeries, activeRange]);
+
   const xDomain = useMemo(() => {
-    const all = allSeries.flatMap(s => s.data.map(p => p.x));
+    if (activeRange.max) return [0, activeRange.max];
+    const all = filteredSeries.flatMap(s => s.data.map(p => p.x));
     if (!all.length) return [0, 20];
     return [0, Math.ceil(Math.max(...all)) + 1];
-  }, [allSeries]);
+  }, [filteredSeries, activeRange]);
 
   const yDomain = useMemo(() => {
-    const all = allSeries.flatMap(s => s.data.map(p => p.y));
+    const all = filteredSeries.flatMap(s => s.data.map(p => p.y));
     if (!all.length) return [0, 15];
     const min = Math.floor(Math.min(...all) * 2) / 2;
     const max = Math.ceil(Math.max(...all) * 2) / 2;
     return [Math.max(0, min - 0.5), max + 0.5];
-  }, [allSeries]);
+  }, [filteredSeries]);
 
   return (
     <div>
       <h2 className={styles.heading}>SA Fixed Income Yield Curve</h2>
       <p className={styles.sub}>Fixed-rate instruments only · Tenor vs Yield</p>
+
+      {/* Tenor range selector */}
+      <div className={styles.categoryBar}>
+        {TENOR_RANGES.map(r => (
+          <button
+            key={r.label}
+            className={`${styles.catBtn} ${tenorRange === r.label ? styles.catBtnOn : ''}`}
+            style={tenorRange === r.label ? { borderColor: '#94a3b8', color: '#e2e8f0', background: '#94a3b822' } : {}}
+            onClick={() => setTenorRange(r.label)}
+            title={r.description}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
 
       {/* Category toggles */}
       <div className={styles.categoryBar}>
@@ -289,7 +327,7 @@ export default function YieldCurve({ data }) {
       </div>
 
       {/* Chart */}
-      {allSeries.length > 0 ? (
+      {filteredSeries.length > 0 ? (
         <div className={styles.chartWrap}>
           <ResponsiveContainer width="100%" height={440}>
             <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 24 }}>
@@ -316,7 +354,7 @@ export default function YieldCurve({ data }) {
               <Legend
                 wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }}
               />
-              {allSeries.map(s => (
+              {filteredSeries.map(s => (
                 <Scatter
                   key={s.key}
                   name={s.label}
