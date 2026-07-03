@@ -63,16 +63,15 @@ export function parseBloombergCSV(text) {
 export function categoriseColumns(columns) {
   const groups = {
     'Policy Rates':          [],
+    'JIBAR Money Market':    [],
+    'Zaronia Money Market':  [],
     'Swaps':                 [],
-    'Government Bonds':      [],
-    'Inflation Linked':      [],
+    'T-Bills':               [],
     'Fixed Rate NCDs':       [],
     'Variable Rate NCDs':    [],
-    'T-Bills':               [],
-    'JIBAR Money Market':    [],
-    'JIBAR FRAs':            [],
-    'Zaronia Money Market':  [],
-    'Zaronia FRAs':          [],
+    'FRAs':                  [],
+    'Government Bonds':      [],
+    'Inflation Linked':      [],
     'SOE / Corporate Bonds': [],
     'Call Accounts':         [],
     'International':         [],
@@ -86,13 +85,33 @@ export function categoriseColumns(columns) {
     if (/^(Repo Rate|Prime Interest rate)$/i.test(n)) {
       groups['Policy Rates'].push(col);
 
-    // JIBAR rates (standalone JIBAR, no FRA)
-    } else if (/JIBAR/i.test(n) && !/FRA/i.test(n)) {
+    // JIBAR rates (standalone, no FRA) — keep these
+    } else if (/JIBAR/i.test(n) && !/FRA/i.test(n) && !/Variable/i.test(n)) {
       groups['JIBAR Money Market'].push(col);
+
+    // Skip JIBAR FRAs entirely
+    } else if (/FRA/i.test(n) && /JIBAR/i.test(n)) {
+      // dropped
+
+    // Skip legacy FRAs without Zaronia suffix (also JIBAR-based)
+    } else if (/FRA/i.test(n) && !/Zaronia/i.test(n)) {
+      // dropped
+
+    // Zaronia FRAs → FRAs section
+    } else if (/FRA/i.test(n) && /Zaronia/i.test(n)) {
+      groups['FRAs'].push(col);
 
     // Zaronia standalone rate
     } else if (/^Zaronia$/i.test(n)) {
       groups['Zaronia Money Market'].push(col);
+
+    // Zaronia Variable Rate NCDs → Variable Rate NCDs
+    } else if (/Variable Rate NCD/i.test(n) && /Zaronia/i.test(n)) {
+      groups['Variable Rate NCDs'].push(col);
+
+    // Skip JIBAR Variable Rate NCDs
+    } else if (/Variable Rate NCD/i.test(n) && !/Zaronia/i.test(n)) {
+      // dropped
 
     // Swaps
     } else if (/SWAP/i.test(n)) {
@@ -102,37 +121,23 @@ export function categoriseColumns(columns) {
     } else if (/T-Bill/i.test(n)) {
       groups['T-Bills'].push(col);
 
-    // Fixed Rate NCDs (named "Fixed Rate NCD" or "Fixed Rate NCD2")
+    // Fixed Rate NCDs
     } else if (/Fixed Rate NCD/i.test(n) && !/Variable/i.test(n)) {
       groups['Fixed Rate NCDs'].push(col);
 
-    // Variable Rate NCDs — both JIBAR-spread and Zaronia-spread
-    } else if (/Variable Rate NCD/i.test(n)) {
-      groups['Variable Rate NCDs'].push(col);
-
-    // JIBAR FRAs — "FRA … - JIBAR" or legacy "FRA 3X6" without a suffix
-    } else if (/FRA/i.test(n) && /JIBAR/i.test(n)) {
-      groups['JIBAR FRAs'].push(col);
-    } else if (/FRA/i.test(n) && !/Zaronia/i.test(n)) {
-      groups['JIBAR FRAs'].push(col);
-
-    // Zaronia FRAs
-    } else if (/FRA/i.test(n) && /Zaronia/i.test(n)) {
-      groups['Zaronia FRAs'].push(col);
-
-    // Zaronia NCD spreads that slipped through
-    } else if (/Zaronia/i.test(n)) {
-      groups['Zaronia Money Market'].push(col);
-
-    // Inflation-linked bonds
-    } else if (/^I\d{4}|Inflation Linked/i.test(n)) {
+    // Inflation-linked bonds (I-series and SA Generic ILBs)
+    } else if (/^I\d{4}( Bond)?$/i.test(n) || /Inflation Linked/i.test(n)) {
       groups['Inflation Linked'].push(col);
 
-    // Nominal government bonds (R-series, generic SA)
+    // Inflation-linked R-series (R210, R202, R197, R212)
+    } else if (/^(R210|R202|R197|R212)( Bond)?$/i.test(n)) {
+      groups['Inflation Linked'].push(col);
+
+    // Nominal government bonds — R-series including short codes like R186, R187, R188
     } else if (/^R\d{3,4}( Bond)?$|SA Generic.*Nominal/i.test(n)) {
       groups['Government Bonds'].push(col);
 
-    // SOE / Corporate bonds (ES, HWAY, TN, FRX, SOAF)
+    // SOE / Corporate bonds
     } else if (/^(ES\d+|HWAY\d+|TN\d+|FRX\d+|SOAF|T 0)/i.test(n)) {
       groups['SOE / Corporate Bonds'].push(col);
 
@@ -141,7 +146,7 @@ export function categoriseColumns(columns) {
       groups['Call Accounts'].push(col);
 
     // International
-    } else if (/US |EU |USD ZAR|CPI|Generic 10|Generic 20|Generic 30|UST|EUT/i.test(n)) {
+    } else if (/US |EU |USD ZAR|CPI|SA Generic 10|SA Generic 20|SA Generic 30|UST|EUT/i.test(n)) {
       groups['International'].push(col);
 
     } else {
