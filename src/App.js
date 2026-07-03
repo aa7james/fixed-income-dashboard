@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { parseBloombergCSV, categoriseColumns } from './utils/parseCSV';
+import { loadFromSupabase } from './utils/supabase';
 import LatestRates from './components/LatestRates';
 import YieldCurve from './components/YieldCurve';
 import RateHistory from './components/RateHistory';
@@ -14,31 +15,38 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('Latest Rates');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
 
-  const handleData = useCallback((text) => {
+  const applyData = useCallback((parsed) => {
+    setData(parsed);
+    setGroups(categoriseColumns(parsed.columns));
+    setError(null);
+  }, []);
+
+  const handleCSV = useCallback((text) => {
     try {
-      const parsed = parseBloombergCSV(text);
-      setData(parsed);
-      setGroups(categoriseColumns(parsed.columns));
-      setError(null);
+      applyData(parseBloombergCSV(text));
     } catch (e) {
       setError('Could not parse the CSV file. Please check the format.');
     }
-  }, []);
+  }, [applyData]);
 
-  // Try to load bundled CSV from public folder on first load
+  // Auto-load from Supabase on open
   useEffect(() => {
-    fetch('/Historical_Bond_Data.csv')
-      .then(r => {
-        if (!r.ok) throw new Error('no bundled csv');
-        return r.text();
+    setLoadingMsg('Connecting to database…');
+    loadFromSupabase()
+      .then(parsed => {
+        if (parsed.dataRows.length > 0) {
+          applyData(parsed);
+        } else {
+          setError('Database is empty — use "Load CSV" to import data.');
+        }
       })
-      .then(text => {
-        handleData(text);
-        setLoading(false);
+      .catch(err => {
+        setError(`Could not load data: ${err.message}`);
       })
-      .catch(() => setLoading(false));
-  }, [handleData]);
+      .finally(() => setLoading(false));
+  }, [applyData]);
 
   return (
     <div className={styles.app}>
@@ -50,19 +58,19 @@ export default function App() {
             <p className={styles.subtitle}>Aylett &amp; Co</p>
           </div>
         </div>
-        <DataUploader onData={handleData} hasData={!!data} />
+        <DataUploader onData={handleCSV} hasData={!!data} />
       </header>
 
       {loading && (
         <div className={styles.center}>
           <div className={styles.spinner} />
-          <p>Loading data…</p>
+          <p>{loadingMsg}</p>
         </div>
       )}
 
-      {!loading && !data && (
+      {!loading && !data && !error && (
         <div className={styles.center}>
-          <p className={styles.placeholder}>Upload your CSV file using the button above to get started.</p>
+          <p className={styles.placeholder}>No data found. Use "Load CSV" to import your data.</p>
         </div>
       )}
 
