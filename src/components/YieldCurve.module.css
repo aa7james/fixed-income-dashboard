@@ -8,17 +8,42 @@
 .sub {
   font-size: 13px;
   color: #64748b;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
-.controls {
+/* ── Category toggles ── */
+.categoryBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.catBtn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #64748b;
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.catBtn:hover { border-color: #475569; color: #e2e8f0; }
+.catBtnOn { font-weight: 600; }
+
+/* ── Date selector ── */
+.dateRow {
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 20px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
 }
 
@@ -33,28 +58,28 @@
   align-items: center;
   gap: 6px;
   background: #0f172a;
-  border: 1px solid #38bdf8;
+  border: 1px solid #334155;
   border-radius: 20px;
   padding: 4px 10px;
   font-size: 12px;
-  color: #e2e8f0;
 }
 
-.chipRemove {
+.chipX {
   background: none;
   border: none;
-  color: #64748b;
+  color: #475569;
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
   padding: 0;
 }
-
-.chipRemove:hover { color: #f87171; }
+.chipX:hover { color: #f87171; }
 
 .addRow {
   display: flex;
   gap: 8px;
+  flex: 1;
+  min-width: 220px;
 }
 
 .dateInput {
@@ -63,11 +88,10 @@
   border: 1px solid #334155;
   border-radius: 8px;
   color: #e2e8f0;
-  font-size: 14px;
-  padding: 8px 12px;
+  font-size: 13px;
+  padding: 7px 10px;
   outline: none;
 }
-
 .dateInput:focus { border-color: #38bdf8; }
 
 .addBtn {
@@ -75,23 +99,58 @@
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 7px 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
-
 .addBtn:hover { background: #38bdf8; }
 
-.chart {
+/* ── Chart ── */
+.chartWrap {
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 10px;
-  padding: 16px 8px;
+  padding: 16px 8px 8px;
 }
 
 .empty {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
   color: #64748b;
-  text-align: center;
-  padding: 60px 0;
+  font-size: 14px;
+}
+
+/* ── Tooltip ── */
+.tooltip {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 100px;
+}
+
+.tooltipLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.tooltipTenor {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.tooltipYield {
+  font-size: 16px;
+  font-weight: 700;
+  color: #38bdf8;
 }
