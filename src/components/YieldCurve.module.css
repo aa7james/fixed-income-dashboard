@@ -1,0 +1,97 @@
+.heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.sub {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.controls {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f172a;
+  border: 1px solid #38bdf8;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.chipRemove {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.chipRemove:hover { color: #f87171; }
+
+.addRow {
+  display: flex;
+  gap: 8px;
+}
+
+.dateInput {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.dateInput:focus { border-color: #38bdf8; }
+
+.addBtn {
+  background: #0ea5e9;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.addBtn:hover { background: #38bdf8; }
+
+.chart {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 16px 8px;
+}
+
+.empty {
+  color: #64748b;
+  text-align: center;
+  padding: 60px 0;
+}

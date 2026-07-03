@@ -1,0 +1,129 @@
+.heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.sub {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 600px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+}
+
+.search:focus { border-color: #38bdf8; }
+
+.list {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  overflow-y: auto;
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  background: none;
+  border: none;
+  border-bottom: 1px solid #0f172a;
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 9px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item:hover { background: #0f172a; color: #e2e8f0; }
+
+.itemActive {
+  background: #0c2a3a !important;
+  color: #38bdf8 !important;
+  font-weight: 600;
+}
+
+.chartArea {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.periodBar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.periodBtn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.periodBtn:hover { color: #e2e8f0; border-color: #475569; }
+
+.periodActive {
+  background: #0c2a3a;
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.chart {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 16px 8px;
+}
+
+.empty {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #64748b;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
