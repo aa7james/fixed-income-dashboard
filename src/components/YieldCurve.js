@@ -161,7 +161,7 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 const CustomDot = (props) => {
-  const { cx, cy, fill, payload } = props;
+  const { cx, cy, fill } = props;
   if (!cx || !cy) return null;
   return (
     <g>
