@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer, LabelList,
 } from 'recharts';
 import { supabase } from '../utils/supabase';
 import styles from './ChartBuilder.module.css';
@@ -223,7 +223,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
           ) : (
             <div className={styles.chart}>
               <ResponsiveContainer width="100%" height={380}>
-                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                <LineChart data={chartData} margin={{ top: 10, right: 55, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis
                     dataKey="dateStr"
@@ -237,23 +237,36 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                   <YAxis
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     tickFormatter={v => `${v}`}
+                    domain={['auto', 'auto']}
                     width={52}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-                  {series.map(s => (
-                    <Line
-                      key={s.key}
-                      type="monotone"
-                      dataKey={s.key}
-                      name={s.label}
-                      stroke={s.color}
-                      dot={false}
-                      strokeWidth={2}
-                      connectNulls={false}
-                      unit={s.type === 'spread' ? ' bps' : '%'}
-                    />
-                  ))}
+                  {series.map(s => {
+                    const unit = s.type === 'spread' ? 'bps' : '%';
+                    return (
+                      <Line
+                        key={s.key}
+                        type="monotone"
+                        dataKey={s.key}
+                        name={s.label}
+                        stroke={s.color}
+                        dot={false}
+                        strokeWidth={2}
+                        connectNulls={false}
+                        unit={` ${unit}`}
+                      >
+                        <LabelList
+                          dataKey={s.key}
+                          position="right"
+                          content={({ x, y, value, index }) => {
+                            if (index !== chartData.length - 1 || value == null) return null;
+                            return <text x={x + 6} y={y + 4} fill={s.color} fontSize={10} fontWeight={700}>{value}{unit}</text>;
+                          }}
+                        />
+                      </Line>
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             </div>
