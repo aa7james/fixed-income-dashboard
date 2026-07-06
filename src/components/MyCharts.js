@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -7,6 +7,7 @@ import { supabase } from '../utils/supabase';
 import styles from './MyCharts.module.css';
 
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
+const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', 'ALL'];
 
 function filterByPeriod(dataRows, period) {
   if (period === 'ALL' || !dataRows.length) return dataRows;
@@ -49,14 +50,50 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function SavedChart({ chart, data, onDelete }) {
-  const [period, setPeriod] = useState(chart.timeframe || '1Y');
-  const [deleting, setDeleting] = useState(false);
-
+function ChartInner({ chart, data, period, height }) {
   const chartData = useMemo(() =>
     buildChartData(data.dataRows, chart.series, period),
     [data.dataRows, chart.series, period]
   );
+
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
+        <XAxis
+          dataKey="dateStr"
+          tick={{ fill: '#64748b', fontSize: 9 }}
+          interval="preserveStartEnd"
+          tickFormatter={d => {
+            const parts = d.split('/');
+            return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
+          }}
+        />
+        <YAxis tick={{ fill: '#64748b', fontSize: 10 }} width={46} />
+        <Tooltip content={<CustomTooltip />} />
+        <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
+        {chart.series.map((s, i) => (
+          <Line
+            key={s.key}
+            type="monotone"
+            dataKey={s.key}
+            name={s.label}
+            stroke={s.color || SERIES_COLORS[i % SERIES_COLORS.length]}
+            dot={false}
+            strokeWidth={1.5}
+            connectNulls={false}
+            unit={s.type === 'spread' ? ' bps' : '%'}
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, onDragStart, onDragOver, onDrop, isDragOver }) {
+  const [period, setPeriod] = useState(chart.timeframe || '1Y');
+  const [deleting, setDeleting] = useState(false);
+  const isWide = layout?.wide || false;
 
   const handleDelete = async () => {
     if (!window.confirm(`Delete "${chart.name}"?`)) return;
@@ -65,11 +102,16 @@ function SavedChart({ chart, data, onDelete }) {
     onDelete(chart.id);
   };
 
-  const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', 'ALL'];
-
   return (
-    <div className={styles.card}>
+    <div
+      className={`${styles.card} ${isWide ? styles.cardWide : ''} ${isDragOver ? styles.dragOver : ''}`}
+      draggable
+      onDragStart={() => onDragStart(chart.id)}
+      onDragOver={e => { e.preventDefault(); onDragOver(chart.id); }}
+      onDrop={() => onDrop(chart.id)}
+    >
       <div className={styles.cardHeader}>
+        <div className={styles.dragHandle} title="Drag to reorder">⠿</div>
         <h3 className={styles.cardTitle}>{chart.name}</h3>
         <div className={styles.cardActions}>
           <div className={styles.miniPeriods}>
@@ -81,42 +123,55 @@ function SavedChart({ chart, data, onDelete }) {
               >{p}</button>
             ))}
           </div>
+          <button
+            className={styles.iconBtn}
+            onClick={() => onToggleWide(chart.id)}
+            title={isWide ? 'Half width' : 'Full width'}
+          >{isWide ? '⬛' : '⬜'}</button>
+          <button
+            className={styles.iconBtn}
+            onClick={() => onMaximize(chart)}
+            title="Maximise"
+          >⛶</button>
           <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>
             {deleting ? '…' : '🗑'}
           </button>
         </div>
       </div>
+      <ChartInner chart={chart} data={data} period={period} height={isWide ? 340 : 260} />
+    </div>
+  );
+}
 
-      <ResponsiveContainer width="100%" height={260}>
-        <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
-          <XAxis
-            dataKey="dateStr"
-            tick={{ fill: '#64748b', fontSize: 9 }}
-            interval="preserveStartEnd"
-            tickFormatter={d => {
-              const parts = d.split('/');
-              return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
-            }}
-          />
-          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} width={46} />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
-          {chart.series.map((s, i) => (
-            <Line
-              key={s.key}
-              type="monotone"
-              dataKey={s.key}
-              name={s.label}
-              stroke={s.color || SERIES_COLORS[i % SERIES_COLORS.length]}
-              dot={false}
-              strokeWidth={1.5}
-              connectNulls={false}
-              unit={s.type === 'spread' ? ' bps' : '%'}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+function MaximizedChart({ chart, data, onClose }) {
+  const [period, setPeriod] = useState(chart.timeframe || '1Y');
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h2 className={styles.modalTitle}>{chart.name}</h2>
+          <div className={styles.cardActions}>
+            <div className={styles.miniPeriods}>
+              {PERIODS.map(p => (
+                <button
+                  key={p}
+                  className={`${styles.miniPeriod} ${period === p ? styles.miniPeriodOn : ''}`}
+                  onClick={() => setPeriod(p)}
+                >{p}</button>
+              ))}
+            </div>
+            <button className={styles.closeBtn} onClick={onClose} title="Close (Esc)">✕</button>
+          </div>
+        </div>
+        <ChartInner chart={chart} data={data} period={period} height={500} />
+      </div>
     </div>
   );
 }
@@ -124,6 +179,15 @@ function SavedChart({ chart, data, onDelete }) {
 export default function MyCharts({ data, refreshTrigger }) {
   const [charts, setCharts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('myCharts_order') || '[]'); } catch { return []; }
+  });
+  const [layouts, setLayouts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('myCharts_layouts') || '{}'); } catch { return {}; }
+  });
+  const [maximized, setMaximized] = useState(null);
+  const dragId = useRef(null);
+  const [dragOverId, setDragOverId] = useState(null);
 
   const loadCharts = useCallback(async () => {
     setLoading(true);
@@ -137,7 +201,54 @@ export default function MyCharts({ data, refreshTrigger }) {
 
   useEffect(() => { loadCharts(); }, [loadCharts, refreshTrigger]);
 
-  const handleDelete = (id) => setCharts(prev => prev.filter(c => c.id !== id));
+  // Sort charts by saved order
+  const sortedCharts = useMemo(() => {
+    if (!order.length) return charts;
+    const indexed = [...charts].sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    return indexed;
+  }, [charts, order]);
+
+  const saveOrder = useCallback((newOrder) => {
+    setOrder(newOrder);
+    localStorage.setItem('myCharts_order', JSON.stringify(newOrder));
+  }, []);
+
+  const saveLayouts = useCallback((newLayouts) => {
+    setLayouts(newLayouts);
+    localStorage.setItem('myCharts_layouts', JSON.stringify(newLayouts));
+  }, []);
+
+  const handleDragStart = (id) => { dragId.current = id; };
+  const handleDragOver = (id) => { setDragOverId(id); };
+  const handleDrop = (targetId) => {
+    if (!dragId.current || dragId.current === targetId) { dragId.current = null; setDragOverId(null); return; }
+    const ids = sortedCharts.map(c => c.id);
+    const fromIdx = ids.indexOf(dragId.current);
+    const toIdx = ids.indexOf(targetId);
+    const newIds = [...ids];
+    newIds.splice(fromIdx, 1);
+    newIds.splice(toIdx, 0, dragId.current);
+    saveOrder(newIds);
+    dragId.current = null;
+    setDragOverId(null);
+  };
+
+  const handleToggleWide = (id) => {
+    const newLayouts = { ...layouts, [id]: { ...layouts[id], wide: !layouts[id]?.wide } };
+    saveLayouts(newLayouts);
+  };
+
+  const handleDelete = (id) => {
+    setCharts(prev => prev.filter(c => c.id !== id));
+    saveOrder(order.filter(x => x !== id));
+  };
 
   if (loading) return <div className={styles.empty}>Loading saved charts…</div>;
 
@@ -152,13 +263,32 @@ export default function MyCharts({ data, refreshTrigger }) {
 
   return (
     <div>
+      {maximized && (
+        <MaximizedChart chart={maximized} data={data} onClose={() => setMaximized(null)} />
+      )}
+
       <div className={styles.header}>
         <h2 className={styles.heading}>My Charts</h2>
-        <p className={styles.sub}>{charts.length} saved chart{charts.length !== 1 ? 's' : ''} — updated automatically with latest data</p>
+        <p className={styles.sub}>
+          {charts.length} saved chart{charts.length !== 1 ? 's' : ''} — drag to reorder · click ⬜/⬛ to resize · ⛶ to maximise
+        </p>
       </div>
+
       <div className={styles.grid}>
-        {charts.map(chart => (
-          <SavedChart key={chart.id} chart={chart} data={data} onDelete={handleDelete} />
+        {sortedCharts.map(chart => (
+          <SavedChart
+            key={chart.id}
+            chart={chart}
+            data={data}
+            layout={layouts[chart.id]}
+            onDelete={handleDelete}
+            onToggleWide={handleToggleWide}
+            onMaximize={setMaximized}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            isDragOver={dragOverId === chart.id}
+          />
         ))}
       </div>
     </div>

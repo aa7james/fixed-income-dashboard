@@ -14,11 +14,12 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+  align-items: start;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; }
 }
 
@@ -27,15 +28,41 @@
   border: 1px solid #334155;
   border-radius: 12px;
   padding: 16px;
+  cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  grid-column: span 1;
+}
+
+.card:active { cursor: grabbing; }
+
+.cardWide {
+  grid-column: span 2;
+}
+
+@media (max-width: 900px) {
+  .cardWide { grid-column: span 1; }
+}
+
+.dragOver {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px #38bdf822;
 }
 
 .cardHeader {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+.dragHandle {
+  font-size: 18px;
+  color: #475569;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+  line-height: 1;
 }
 
 .cardTitle {
@@ -43,12 +70,14 @@
   font-weight: 700;
   color: #f1f5f9;
   margin: 0;
+  flex: 1;
+  min-width: 80px;
 }
 
 .cardActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -75,6 +104,19 @@
   color: #38bdf8;
 }
 
+.iconBtn {
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 14px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.1s;
+  line-height: 1.2;
+}
+.iconBtn:hover { border-color: #94a3b8; color: #e2e8f0; }
+
 .deleteBtn {
   background: none;
   border: 1px solid #334155;
@@ -86,6 +128,57 @@
   transition: all 0.1s;
 }
 .deleteBtn:hover { border-color: #f87171; color: #f87171; }
+
+/* Fullscreen overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 1100px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+  flex: 1;
+}
+
+.closeBtn {
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 16px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.closeBtn:hover { border-color: #f87171; color: #f87171; }
 
 .empty {
   background: #1e293b;
