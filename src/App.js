@@ -7,10 +7,11 @@ import YieldCurve from './components/YieldCurve';
 import RateHistory from './components/RateHistory';
 import ChartBuilder from './components/ChartBuilder';
 import MyCharts from './components/MyCharts';
+import MarketPricing from './components/MarketPricing';
 import DataUploader from './components/DataUploader';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Yield Curve', 'Rate History', 'Chart Builder', 'My Charts'];
+const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Rate History', 'Chart Builder', 'My Charts'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -100,7 +101,8 @@ export default function App() {
           </nav>
 
           <main className={styles.main}>
-            {activeTab === 'Latest Rates'  && <LatestRates   data={data} groups={groups} />}
+            {activeTab === 'Latest Rates'   && <LatestRates    data={data} groups={groups} />}
+            {activeTab === 'Market Pricing' && <MarketPricing  data={data} instruments={instruments} />}
             {activeTab === 'Yield Curve'   && <YieldCurve    data={data} instruments={instruments} />}
             {activeTab === 'Rate History'  && <RateHistory   data={data} groups={groups} />}
             {activeTab === 'Chart Builder' && <ChartBuilder  data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
