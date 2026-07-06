@@ -81,9 +81,40 @@
   flex-wrap: wrap;
 }
 
+.periodWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
 .miniPeriods {
   display: flex;
   gap: 2px;
+  flex-wrap: wrap;
+}
+
+.dateRange {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dateInput {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+}
+.dateInput:focus { border-color: #38bdf8; }
+
+.dateSep {
+  color: #475569;
+  font-size: 12px;
 }
 
 .miniPeriod {

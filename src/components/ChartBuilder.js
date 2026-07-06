@@ -6,20 +6,26 @@ import {
 import { supabase } from '../utils/supabase';
 import styles from './ChartBuilder.module.css';
 
-const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', 'ALL'];
+const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', '10Y', 'ALL', 'Custom'];
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
 
-function filterByPeriod(dataRows, period) {
-  if (period === 'ALL' || !dataRows.length) return dataRows;
+function filterByPeriod(dataRows, period, customFrom, customTo) {
+  if (!dataRows.length) return dataRows;
+  if (period === 'ALL') return dataRows;
+  if (period === 'Custom') {
+    const from = customFrom ? new Date(customFrom) : null;
+    const to = customTo ? new Date(customTo) : null;
+    return dataRows.filter(r => (!from || r.date >= from) && (!to || r.date <= to));
+  }
   const last = dataRows[dataRows.length - 1].date;
-  const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '5Y': 60 }[period] || 12;
+  const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '5Y': 60, '10Y': 120 }[period] || 12;
   const cutoff = new Date(last);
   cutoff.setMonth(cutoff.getMonth() - months);
   return dataRows.filter(r => r.date >= cutoff);
 }
 
-function buildChartData(dataRows, series, period) {
-  const rows = filterByPeriod(dataRows, period);
+function buildChartData(dataRows, series, period, customFrom, customTo) {
+  const rows = filterByPeriod(dataRows, period, customFrom, customTo);
   return rows.map(row => {
     const point = { dateStr: row.dateStr };
     series.forEach(s => {
@@ -59,6 +65,8 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
   const [search, setSearch] = useState('');
   const [series, setSeries] = useState([]);
   const [period, setPeriod] = useState('1Y');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [chartName, setChartName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -96,8 +104,8 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
   const removeSeries = (key) => setSeries(prev => prev.filter(s => s.key !== key));
 
   const chartData = useMemo(() =>
-    buildChartData(data.dataRows, series, period),
-    [data.dataRows, series, period]
+    buildChartData(data.dataRows, series, period, customFrom, customTo),
+    [data.dataRows, series, period, customFrom, customTo]
   );
 
   const saveChart = async () => {
@@ -202,6 +210,13 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
               >{p}</button>
             ))}
           </div>
+          {period === 'Custom' && (
+            <div className={styles.dateRange}>
+              <input type="date" className={styles.dateInput} value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+              <span style={{ color: '#475569' }}>→</span>
+              <input type="date" className={styles.dateInput} value={customTo} onChange={e => setCustomTo(e.target.value)} />
+            </div>
+          )}
 
           {series.length === 0 ? (
             <div className={styles.empty}>Add a series on the left to preview your chart</div>

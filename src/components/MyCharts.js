@@ -7,19 +7,25 @@ import { supabase } from '../utils/supabase';
 import styles from './MyCharts.module.css';
 
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
-const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', 'ALL'];
+const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', '10Y', 'ALL', 'Custom'];
 
-function filterByPeriod(dataRows, period) {
-  if (period === 'ALL' || !dataRows.length) return dataRows;
+function filterByPeriod(dataRows, period, customFrom, customTo) {
+  if (!dataRows.length) return dataRows;
+  if (period === 'ALL') return dataRows;
+  if (period === 'Custom') {
+    const from = customFrom ? new Date(customFrom) : null;
+    const to = customTo ? new Date(customTo) : null;
+    return dataRows.filter(r => (!from || r.date >= from) && (!to || r.date <= to));
+  }
   const last = dataRows[dataRows.length - 1].date;
-  const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '5Y': 60 }[period] || 12;
+  const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '5Y': 60, '10Y': 120 }[period] || 12;
   const cutoff = new Date(last);
   cutoff.setMonth(cutoff.getMonth() - months);
   return dataRows.filter(r => r.date >= cutoff);
 }
 
-function buildChartData(dataRows, series, period) {
-  const rows = filterByPeriod(dataRows, period);
+function buildChartData(dataRows, series, period, customFrom, customTo) {
+  const rows = filterByPeriod(dataRows, period, customFrom, customTo);
   return rows.map(row => {
     const point = { dateStr: row.dateStr };
     series.forEach(s => {
@@ -50,10 +56,10 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function ChartInner({ chart, data, period, height }) {
+function ChartInner({ chart, data, period, customFrom, customTo, height }) {
   const chartData = useMemo(() =>
-    buildChartData(data.dataRows, chart.series, period),
-    [data.dataRows, chart.series, period]
+    buildChartData(data.dataRows, chart.series, period, customFrom, customTo),
+    [data.dataRows, chart.series, period, customFrom, customTo]
   );
 
   return (
@@ -90,8 +96,33 @@ function ChartInner({ chart, data, period, height }) {
   );
 }
 
+function PeriodSelector({ period, setPeriod, customFrom, setCustomFrom, customTo, setCustomTo }) {
+  return (
+    <div className={styles.periodWrap}>
+      <div className={styles.miniPeriods}>
+        {PERIODS.map(p => (
+          <button
+            key={p}
+            className={`${styles.miniPeriod} ${period === p ? styles.miniPeriodOn : ''}`}
+            onClick={() => setPeriod(p)}
+          >{p}</button>
+        ))}
+      </div>
+      {period === 'Custom' && (
+        <div className={styles.dateRange}>
+          <input type="date" className={styles.dateInput} value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+          <span className={styles.dateSep}>→</span>
+          <input type="date" className={styles.dateInput} value={customTo} onChange={e => setCustomTo(e.target.value)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, onDragStart, onDragOver, onDrop, isDragOver }) {
   const [period, setPeriod] = useState(chart.timeframe || '1Y');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [deleting, setDeleting] = useState(false);
   const isWide = layout?.wide || false;
 
@@ -114,37 +145,22 @@ function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, o
         <div className={styles.dragHandle} title="Drag to reorder">⠿</div>
         <h3 className={styles.cardTitle}>{chart.name}</h3>
         <div className={styles.cardActions}>
-          <div className={styles.miniPeriods}>
-            {PERIODS.map(p => (
-              <button
-                key={p}
-                className={`${styles.miniPeriod} ${period === p ? styles.miniPeriodOn : ''}`}
-                onClick={() => setPeriod(p)}
-              >{p}</button>
-            ))}
-          </div>
-          <button
-            className={styles.iconBtn}
-            onClick={() => onToggleWide(chart.id)}
-            title={isWide ? 'Half width' : 'Full width'}
-          >{isWide ? '⬛' : '⬜'}</button>
-          <button
-            className={styles.iconBtn}
-            onClick={() => onMaximize(chart)}
-            title="Maximise"
-          >⛶</button>
-          <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>
-            {deleting ? '…' : '🗑'}
-          </button>
+          <PeriodSelector period={period} setPeriod={setPeriod} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
+          <button className={styles.iconBtn} onClick={() => onToggleWide(chart.id)} title={isWide ? 'Half width' : 'Full width'}>{isWide ? '⬛' : '⬜'}</button>
+          <button className={styles.iconBtn} onClick={() => onMaximize({ chart, period, customFrom, customTo })} title="Maximise">⛶</button>
+          <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>{deleting ? '…' : '🗑'}</button>
         </div>
       </div>
-      <ChartInner chart={chart} data={data} period={period} height={isWide ? 340 : 260} />
+      <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={isWide ? 340 : 260} />
     </div>
   );
 }
 
-function MaximizedChart({ chart, data, onClose }) {
-  const [period, setPeriod] = useState(chart.timeframe || '1Y');
+function MaximizedChart({ item, data, onClose }) {
+  const { chart } = item;
+  const [period, setPeriod] = useState(item.period || chart.timeframe || '1Y');
+  const [customFrom, setCustomFrom] = useState(item.customFrom || '');
+  const [customTo, setCustomTo] = useState(item.customTo || '');
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose(); };
@@ -158,19 +174,11 @@ function MaximizedChart({ chart, data, onClose }) {
         <div className={styles.modalHeader}>
           <h2 className={styles.modalTitle}>{chart.name}</h2>
           <div className={styles.cardActions}>
-            <div className={styles.miniPeriods}>
-              {PERIODS.map(p => (
-                <button
-                  key={p}
-                  className={`${styles.miniPeriod} ${period === p ? styles.miniPeriodOn : ''}`}
-                  onClick={() => setPeriod(p)}
-                >{p}</button>
-              ))}
-            </div>
+            <PeriodSelector period={period} setPeriod={setPeriod} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
             <button className={styles.closeBtn} onClick={onClose} title="Close (Esc)">✕</button>
           </div>
         </div>
-        <ChartInner chart={chart} data={data} period={period} height={500} />
+        <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={500} />
       </div>
     </div>
   );
@@ -264,7 +272,7 @@ export default function MyCharts({ data, refreshTrigger }) {
   return (
     <div>
       {maximized && (
-        <MaximizedChart chart={maximized} data={data} onClose={() => setMaximized(null)} />
+        <MaximizedChart item={maximized} data={data} onClose={() => setMaximized(null)} />
       )}
 
       <div className={styles.header}>
