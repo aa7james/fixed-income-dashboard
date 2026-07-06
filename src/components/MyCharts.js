@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer, LabelList,
 } from 'recharts';
 import { supabase } from '../utils/supabase';
 import styles from './MyCharts.module.css';
@@ -56,6 +56,17 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+function EndLabel({ viewBox, value, color, unit, index, total }) {
+  if (index !== total - 1) return null;
+  if (value == null) return null;
+  const { x, y } = viewBox;
+  return (
+    <text x={x + 6} y={y + 4} fill={color} fontSize={10} fontWeight={700}>
+      {value}{unit}
+    </text>
+  );
+}
+
 function ChartInner({ chart, data, period, customFrom, customTo, height }) {
   const chartData = useMemo(() =>
     buildChartData(data.dataRows, chart.series, period, customFrom, customTo),
@@ -64,7 +75,7 @@ function ChartInner({ chart, data, period, customFrom, customTo, height }) {
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+      <LineChart data={chartData} margin={{ top: 8, right: 55, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
         <XAxis
           dataKey="dateStr"
@@ -75,22 +86,46 @@ function ChartInner({ chart, data, period, customFrom, customTo, height }) {
             return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
           }}
         />
-        <YAxis tick={{ fill: '#64748b', fontSize: 10 }} width={46} />
+        <YAxis
+          tick={{ fill: '#64748b', fontSize: 10 }}
+          width={52}
+          domain={['auto', 'auto']}
+          tickFormatter={v => v}
+        />
         <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
-        {chart.series.map((s, i) => (
-          <Line
-            key={s.key}
-            type="monotone"
-            dataKey={s.key}
-            name={s.label}
-            stroke={s.color || SERIES_COLORS[i % SERIES_COLORS.length]}
-            dot={false}
-            strokeWidth={1.5}
-            connectNulls={false}
-            unit={s.type === 'spread' ? ' bps' : '%'}
-          />
-        ))}
+        {chart.series.map((s, i) => {
+          const color = s.color || SERIES_COLORS[i % SERIES_COLORS.length];
+          const unit = s.type === 'spread' ? 'bps' : '%';
+          return (
+            <Line
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              name={s.label}
+              stroke={color}
+              dot={false}
+              strokeWidth={1.5}
+              connectNulls={false}
+              unit={` ${unit}`}
+            >
+              <LabelList
+                dataKey={s.key}
+                position="right"
+                content={({ x, y, value, index }) => (
+                  <EndLabel
+                    viewBox={{ x, y }}
+                    value={value}
+                    color={color}
+                    unit={unit}
+                    index={index}
+                    total={chartData.length}
+                  />
+                )}
+              />
+            </Line>
+          );
+        })}
       </LineChart>
     </ResponsiveContainer>
   );
@@ -119,12 +154,16 @@ function PeriodSelector({ period, setPeriod, customFrom, setCustomFrom, customTo
   );
 }
 
-function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, onDragStart, onDragOver, onDrop, isDragOver }) {
-  const [period, setPeriod] = useState(chart.timeframe || '1Y');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, onPeriodChange, onDragStart, onDragOver, onDrop, isDragOver }) {
+  const [period, setPeriod] = useState(layout?.period || chart.timeframe || '1Y');
+  const [customFrom, setCustomFrom] = useState(layout?.customFrom || '');
+  const [customTo, setCustomTo] = useState(layout?.customTo || '');
   const [deleting, setDeleting] = useState(false);
   const isWide = layout?.wide || false;
+
+  const handlePeriodChange = (p) => { setPeriod(p); onPeriodChange(chart.id, { period: p, customFrom, customTo }); };
+  const handleFromChange = (v) => { setCustomFrom(v); onPeriodChange(chart.id, { period, customFrom: v, customTo }); };
+  const handleToChange = (v) => { setCustomTo(v); onPeriodChange(chart.id, { period, customFrom, customTo: v }); };
 
   const handleDelete = async () => {
     if (!window.confirm(`Delete "${chart.name}"?`)) return;
@@ -145,7 +184,7 @@ function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, o
         <div className={styles.dragHandle} title="Drag to reorder">⠿</div>
         <h3 className={styles.cardTitle}>{chart.name}</h3>
         <div className={styles.cardActions}>
-          <PeriodSelector period={period} setPeriod={setPeriod} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
+          <PeriodSelector period={period} setPeriod={handlePeriodChange} customFrom={customFrom} setCustomFrom={handleFromChange} customTo={customTo} setCustomTo={handleToChange} />
           <button className={styles.iconBtn} onClick={() => onToggleWide(chart.id)} title={isWide ? 'Half width' : 'Full width'}>{isWide ? '⬛' : '⬜'}</button>
           <button className={styles.iconBtn} onClick={() => onMaximize({ chart, period, customFrom, customTo })} title="Maximise">⛶</button>
           <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>{deleting ? '…' : '🗑'}</button>
@@ -253,6 +292,11 @@ export default function MyCharts({ data, refreshTrigger }) {
     saveLayouts(newLayouts);
   };
 
+  const handlePeriodChange = (id, periodState) => {
+    const newLayouts = { ...layouts, [id]: { ...layouts[id], ...periodState } };
+    saveLayouts(newLayouts);
+  };
+
   const handleDelete = (id) => {
     setCharts(prev => prev.filter(c => c.id !== id));
     saveOrder(order.filter(x => x !== id));
@@ -291,6 +335,7 @@ export default function MyCharts({ data, refreshTrigger }) {
             layout={layouts[chart.id]}
             onDelete={handleDelete}
             onToggleWide={handleToggleWide}
+            onPeriodChange={handlePeriodChange}
             onMaximize={setMaximized}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
