@@ -5,10 +5,12 @@ import { categoriseFromInstruments, categoriseColumns } from './utils/parseCSV';
 import LatestRates from './components/LatestRates';
 import YieldCurve from './components/YieldCurve';
 import RateHistory from './components/RateHistory';
+import ChartBuilder from './components/ChartBuilder';
+import MyCharts from './components/MyCharts';
 import DataUploader from './components/DataUploader';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Yield Curve', 'Rate History'];
+const TABS = ['Latest Rates', 'Yield Curve', 'Rate History', 'Chart Builder', 'My Charts'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -18,6 +20,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
+  const [chartRefresh, setChartRefresh] = useState(0);
 
   const applyData = useCallback((parsed, instrumentList) => {
     setData(parsed);
@@ -97,9 +100,11 @@ export default function App() {
           </nav>
 
           <main className={styles.main}>
-            {activeTab === 'Latest Rates' && <LatestRates data={data} groups={groups} />}
-            {activeTab === 'Yield Curve'  && <YieldCurve  data={data} instruments={instruments} />}
-            {activeTab === 'Rate History' && <RateHistory data={data} groups={groups} />}
+            {activeTab === 'Latest Rates'  && <LatestRates   data={data} groups={groups} />}
+            {activeTab === 'Yield Curve'   && <YieldCurve    data={data} instruments={instruments} />}
+            {activeTab === 'Rate History'  && <RateHistory   data={data} groups={groups} />}
+            {activeTab === 'Chart Builder' && <ChartBuilder  data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
+            {activeTab === 'My Charts'     && <MyCharts      data={data} refreshTrigger={chartRefresh} />}
           </main>
         </>
       )}

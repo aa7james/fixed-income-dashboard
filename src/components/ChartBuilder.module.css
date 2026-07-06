@@ -1,0 +1,247 @@
+.wrap { }
+
+.heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.sub {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panelTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.typeRow {
+  display: flex;
+  gap: 6px;
+}
+
+.typeBtn {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.typeBtnOn {
+  background: #0c2a3a;
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.search {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.search:focus { border-color: #38bdf8; }
+
+.pickRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.select {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+}
+.select:focus { border-color: #38bdf8; }
+
+.addBtn {
+  background: #38bdf8;
+  border: none;
+  border-radius: 8px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.addBtn:hover { opacity: 0.85; }
+
+.seriesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seriesItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.seriesDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.seriesLabel {
+  flex: 1;
+  font-size: 12px;
+  color: #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.removeBtn {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.removeBtn:hover { color: #f87171; }
+
+.chartPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.periodBar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.periodBtn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.periodBtn:hover { color: #e2e8f0; border-color: #475569; }
+.periodActive {
+  background: #0c2a3a;
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.chart {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 16px 8px;
+}
+
+.empty {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #64748b;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
+.saveRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nameInput {
+  flex: 1;
+  min-width: 160px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+}
+.nameInput:focus { border-color: #38bdf8; }
+
+.saveBtn {
+  background: #4ade80;
+  border: none;
+  border-radius: 8px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.saveBtn:hover { opacity: 0.85; }
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.saveMsg {
+  font-size: 13px;
+  color: #4ade80;
+}
