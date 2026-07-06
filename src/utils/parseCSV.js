@@ -109,9 +109,9 @@ export function categoriseColumns(columns) {
     } else if (/Variable Rate NCD/i.test(n) && /Zaronia/i.test(n)) {
       groups['Variable Rate NCDs'].push(col);
 
-    // Skip JIBAR Variable Rate NCDs
+    // JIBAR Variable Rate NCD Spreads → Variable Rate NCDs
     } else if (/Variable Rate NCD/i.test(n) && !/Zaronia/i.test(n)) {
-      // dropped
+      groups['Variable Rate NCDs'].push(col);
 
     // Swaps
     } else if (/SWAP/i.test(n)) {
