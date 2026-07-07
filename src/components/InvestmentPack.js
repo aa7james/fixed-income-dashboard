@@ -1,12 +1,50 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import YieldCurve from './YieldCurve';
 import InflationLinkedBonds from './InflationLinkedBonds';
 import MarketPricing from './MarketPricing';
 import { ChartInner } from './MyCharts';
 import styles from './InvestmentPack.module.css';
 
-export default function InvestmentPack({ packItems, onTogglePack, data, instruments }) {
-  const printRef = useRef();
+const FRA_TITLES = { 'jibar-fra': 'JIBAR FRA Curve', 'zaronia-fra': 'Zaronia FRA Curve' };
+
+function PackSection({ itemKey, onRemove, onDragStart, onDragOver, onDrop, isDragOver, children }) {
+  return (
+    <div
+      className={`${styles.chartSection} ${isDragOver ? styles.dragOver : ''}`}
+      draggable
+      onDragStart={() => onDragStart(itemKey)}
+      onDragOver={e => { e.preventDefault(); onDragOver(itemKey); }}
+      onDrop={() => onDrop(itemKey)}
+    >
+      <div className={styles.sectionHeader}>
+        <span className={styles.dragHandle} title="Drag to reorder">⠿</span>
+        <button className={styles.removeBtn} onClick={() => onRemove(itemKey)}>✕ Remove</button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export default function InvestmentPack({ packItems, onTogglePack, onReorder, data, instruments }) {
+  const dragKey = useRef(null);
+  const [dragOverKey, setDragOverKey] = useState(null);
+
+  const handleDragStart = (key) => { dragKey.current = key; };
+  const handleDragOver  = (key) => { setDragOverKey(key); };
+  const handleDrop      = (key) => {
+    if (dragKey.current && dragKey.current !== key) onReorder(dragKey.current, key);
+    dragKey.current = null;
+    setDragOverKey(null);
+  };
+
+  const sectionProps = (key) => ({
+    itemKey: key,
+    onRemove: onTogglePack,
+    onDragStart: handleDragStart,
+    onDragOver: handleDragOver,
+    onDrop: handleDrop,
+    isDragOver: dragOverKey === key,
+  });
 
   const handlePrint = () => window.print();
 
@@ -21,75 +59,58 @@ export default function InvestmentPack({ packItems, onTogglePack, data, instrume
     );
   }
 
-  const findItem       = (key) => packItems.find(item => item.key === key);
-  const showYieldCurve = !!findItem('yield-curve');
-  const showInflation  = !!findItem('inflation-linked');
-  const fraKeys        = packItems.filter(item => item.key === 'jibar-fra' || item.key === 'zaronia-fra').map(i => i.key);
-  const myChartItems   = packItems.filter(item => item.key.startsWith('my-chart-'));
-
   return (
     <div>
-      {/* Screen header */}
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>Investment Pack</h2>
-          <p className={styles.subtitle}>{packItems.length} chart{packItems.length !== 1 ? 's' : ''} selected</p>
+          <p className={styles.subtitle}>
+            {packItems.length} chart{packItems.length !== 1 ? 's' : ''} — drag ⠿ to reorder
+          </p>
         </div>
-        <button className={styles.printBtn} onClick={handlePrint}>
-          🖨 Print to PDF
-        </button>
+        <button className={styles.printBtn} onClick={handlePrint}>🖨 Print to PDF</button>
       </div>
 
-      {/* Printable content */}
-      <div ref={printRef} className={styles.packContent} id="investment-pack-content">
+      <div className={styles.packContent} id="investment-pack-content">
 
         <div className={styles.printHeader}>
           <h1 className={styles.printTitle}>Fixed Income — Investment Pack</h1>
           <p className={styles.printDate}>Aylett &amp; Co · {new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
         </div>
 
-        {showYieldCurve && (
-          <div className={styles.chartSection}>
-            <div className={styles.sectionHeader}>
-              <span />
-              <button className={styles.removeBtn} onClick={() => onTogglePack('yield-curve')}>✕ Remove</button>
-            </div>
-            <YieldCurve data={data} instruments={instruments} packMode packConfig={findItem('yield-curve')?.config} />
-          </div>
-        )}
-
-        {showInflation && (
-          <div className={styles.chartSection}>
-            <div className={styles.sectionHeader}>
-              <span />
-              <button className={styles.removeBtn} onClick={() => onTogglePack('inflation-linked')}>✕ Remove</button>
-            </div>
-            <InflationLinkedBonds />
-          </div>
-        )}
-
-        {fraKeys.map(key => (
-          <div key={key} className={styles.chartSection}>
-            <div className={styles.sectionHeader}>
-              <span />
-              <button className={styles.removeBtn} onClick={() => onTogglePack(key)}>✕ Remove</button>
-            </div>
-            <MarketPricing data={data} instruments={instruments} packMode packKeys={[key]} />
-          </div>
-        ))}
-
-        {myChartItems.map(item => {
+        {packItems.map(item => {
+          const key = item.key;
           const cfg = item.config;
-          const chart = { id: cfg.chartId, name: cfg.chartName, series: cfg.series };
-          return (
-            <div key={item.key} className={styles.chartSection}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>{cfg.chartName}</h3>
-                <button className={styles.removeBtn} onClick={() => onTogglePack(item.key)}>✕ Remove</button>
-              </div>
-              <ChartInner chart={chart} data={data} period={cfg.period} customFrom={cfg.customFrom} customTo={cfg.customTo} height={300} />
-            </div>
+
+          if (key === 'yield-curve') return (
+            <PackSection key={key} {...sectionProps(key)}>
+              <YieldCurve data={data} instruments={instruments} packMode packConfig={cfg} />
+            </PackSection>
           );
+
+          if (key === 'inflation-linked') return (
+            <PackSection key={key} {...sectionProps(key)}>
+              <InflationLinkedBonds />
+            </PackSection>
+          );
+
+          if (key === 'jibar-fra' || key === 'zaronia-fra') return (
+            <PackSection key={key} {...sectionProps(key)}>
+              <MarketPricing data={data} instruments={instruments} packMode packKeys={[key]} />
+            </PackSection>
+          );
+
+          if (key.startsWith('my-chart-')) {
+            const chart = { id: cfg.chartId, name: cfg.chartName, series: cfg.series };
+            return (
+              <PackSection key={key} {...sectionProps(key)}>
+                <h3 className={styles.sectionTitle}>{cfg.chartName}</h3>
+                <ChartInner chart={chart} data={data} period={cfg.period} customFrom={cfg.customFrom} customTo={cfg.customTo} height={300} />
+              </PackSection>
+            );
+          }
+
+          return null;
         })}
 
       </div>

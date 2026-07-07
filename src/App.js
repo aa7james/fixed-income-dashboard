@@ -34,6 +34,16 @@ export default function App() {
         : [...prev, { key, config }];
     });
 
+  const reorderPack = (fromKey, toKey) =>
+    setPackItems(prev => {
+      const from = prev.findIndex(i => i.key === fromKey);
+      const to   = prev.findIndex(i => i.key === toKey);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = [...prev];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      return next;
+    });
+
   const isInPack = (key) => packItems.some(item => item.key === key);
 
   const applyData = useCallback((parsed, instrumentList) => {
@@ -120,7 +130,7 @@ export default function App() {
             {activeTab === 'Rate History'    && <RateHistory    data={data} groups={groups} />}
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
             {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
-            {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} data={data} instruments={instruments} />}
+            {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} onReorder={reorderPack} data={data} instruments={instruments} />}
           </main>
         </>
       )}
