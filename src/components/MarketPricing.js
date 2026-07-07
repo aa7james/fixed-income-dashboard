@@ -5,7 +5,11 @@ import {
 } from 'recharts';
 import styles from './MarketPricing.module.css';
 
-// Parse "NxM" tenor into start month for sorting
+// Parse "NxM" — returns end month for X-axis positioning
+function tenorEndMonth(name) {
+  const m = name.match(/(\d+)[Xx](\d+)/);
+  return m ? parseInt(m[2], 10) : 999;
+}
 function tenorStartMonth(name) {
   const m = name.match(/(\d+)[Xx](\d+)/);
   return m ? parseInt(m[1], 10) : 999;
@@ -16,28 +20,29 @@ function buildFraCurveData(fraInstruments, baseInstrument, latestRow) {
 
   const baseVal = baseInstrument ? (latestRow[baseInstrument.name] ?? null) : null;
 
-  // Sort FRAs by tenor
   const sorted = [...fraInstruments].sort((a, b) => tenorStartMonth(a.name) - tenorStartMonth(b.name));
 
   const points = [];
 
-  // Prepend the base rate as first point
+  // Base rate at month 0
   if (baseInstrument && baseVal != null) {
     points.push({
       label: baseInstrument.display_label || baseInstrument.name,
+      month: 0,
       rate: +baseVal.toFixed(4),
-      increase: null,
+      cumulative: null,
     });
   }
 
-  sorted.forEach((inst, i) => {
+  sorted.forEach(inst => {
     const rate = latestRow[inst.name] ?? null;
-    const prevRate = i === 0 ? baseVal : (latestRow[sorted[i - 1].name] ?? null);
-    const increase = rate != null && prevRate != null ? +((rate - prevRate).toFixed(4)) : null;
+    // Cumulative = total increase from base rate
+    const cumulative = rate != null && baseVal != null ? +((rate - baseVal).toFixed(4)) : null;
     points.push({
       label: inst.display_label || inst.name,
+      month: tenorEndMonth(inst.name),
       rate: rate != null ? +rate.toFixed(4) : null,
-      increase,
+      cumulative,
     });
   });
 
@@ -61,6 +66,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 function FraCurveChart({ title, data }) {
   if (!data.length) return null;
 
+  const barData = data.slice(1); // exclude base from bar chart
+
   return (
     <div className={styles.chartCard}>
       <h3 className={styles.chartTitle}>{title}</h3>
@@ -80,26 +87,40 @@ function FraCurveChart({ title, data }) {
               {data.map(d => <td key={d.label}>{d.rate ?? '—'}</td>)}
             </tr>
             <tr>
-              <td>Increase</td>
-              {data.map(d => <td key={d.label}>{d.increase != null ? d.increase : '—'}</td>)}
+              <td>Cum. Increase</td>
+              {data.map(d => <td key={d.label}>{d.cumulative != null ? d.cumulative : '—'}</td>)}
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* Line chart — rate level */}
+      {/* Line chart — rate level, X-axis spaced by actual end month */}
       <p className={styles.subLabel}>FRA Curve</p>
       <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+        <ComposedChart data={data} margin={{ top: 16, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} />
+          <XAxis
+            dataKey="month"
+            type="number"
+            domain={[0, 'dataMax']}
+            ticks={data.map(d => d.month)}
+            tickFormatter={m => {
+              const pt = data.find(d => d.month === m);
+              return pt ? pt.label : m;
+            }}
+            tick={{ fill: '#64748b', fontSize: 9 }}
+            interval={0}
+          />
           <YAxis
             domain={['auto', 'auto']}
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={50}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip
+            labelFormatter={m => { const pt = data.find(d => d.month === m); return pt ? pt.label : m; }}
+            content={<CustomTooltip />}
+          />
           <Line
             type="monotone"
             dataKey="rate"
@@ -114,21 +135,35 @@ function FraCurveChart({ title, data }) {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Bar chart — increments */}
-      <p className={styles.subLabel}>Increase</p>
-      <ResponsiveContainer width="100%" height={180}>
-        <ComposedChart data={data.slice(1)} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+      {/* Bar chart — cumulative increase from base */}
+      <p className={styles.subLabel}>Cumulative Increase from Base</p>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={barData} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} />
+          <XAxis
+            dataKey="month"
+            type="number"
+            domain={[0, 'dataMax']}
+            ticks={barData.map(d => d.month)}
+            tickFormatter={m => {
+              const pt = barData.find(d => d.month === m);
+              return pt ? pt.label : m;
+            }}
+            tick={{ fill: '#64748b', fontSize: 9 }}
+            interval={0}
+          />
           <YAxis
-            domain={['auto', 'auto']}
+            domain={[0, 'auto']}
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={50}
           />
-          <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="increase" name="Increase" fill="#38bdf8" radius={[4, 4, 0, 0]}>
-            <LabelList dataKey="increase" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
+          <Tooltip
+            labelFormatter={m => { const pt = barData.find(d => d.month === m); return pt ? pt.label : m; }}
+            content={<CustomTooltip />}
+          />
+          <Bar dataKey="cumulative" name="Cum. Increase" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={28}>
+            <LabelList dataKey="cumulative" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
           </Bar>
         </ComposedChart>
       </ResponsiveContainer>
@@ -147,13 +182,11 @@ export default function MarketPricing({ data, instruments }) {
     return data.dataRows[data.dataRows.length - 1].dateStr || '';
   }, [data]);
 
-  // Split FRA instruments into JIBAR and Zaronia groups
   const { jibarFras, zaroniaFras, jibarBase, zaroniaBase } = useMemo(() => {
     const fras = instruments.filter(i => i.category === 'FRAs');
     const jibarFras = fras.filter(i => i.name.toLowerCase().includes('jibar'));
     const zaroniaFras = fras.filter(i => i.name.toLowerCase().includes('zaronia'));
 
-    // Base rates — most recent spot rate for each
     const jibarBase = instruments.find(i =>
       i.category !== 'FRAs' && i.name.toLowerCase().includes('jibar') && i.name.toLowerCase().includes('3m')
     );
