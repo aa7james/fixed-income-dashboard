@@ -5,7 +5,6 @@ import MarketPricing from './MarketPricing';
 import { ChartInner } from './MyCharts';
 import styles from './InvestmentPack.module.css';
 
-const FRA_TITLES = { 'jibar-fra': 'JIBAR FRA Curve', 'zaronia-fra': 'Zaronia FRA Curve' };
 
 function PackSection({ itemKey, onRemove, onDragStart, onDragOver, onDrop, isDragOver, children }) {
   return (
