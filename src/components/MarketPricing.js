@@ -5,13 +5,13 @@ import {
 } from 'recharts';
 import styles from './MarketPricing.module.css';
 
-// Parse "NxM" — returns end month for X-axis positioning
+// Parse "NxM" or "N×M" — returns end month for X-axis positioning
 function tenorEndMonth(name) {
-  const m = name.match(/(\d+)[Xx](\d+)/);
+  const m = name.match(/(\d+)[Xx×](\d+)/);
   return m ? parseInt(m[2], 10) : 999;
 }
 function tenorStartMonth(name) {
-  const m = name.match(/(\d+)[Xx](\d+)/);
+  const m = name.match(/(\d+)[Xx×](\d+)/);
   return m ? parseInt(m[1], 10) : 999;
 }
 
