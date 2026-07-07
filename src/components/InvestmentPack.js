@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import YieldCurve from './YieldCurve';
 import InflationLinkedBonds from './InflationLinkedBonds';
 import MarketPricing from './MarketPricing';
+import { ChartInner } from './MyCharts';
 import styles from './InvestmentPack.module.css';
 
 export default function InvestmentPack({ packItems, data, instruments }) {
@@ -20,10 +21,11 @@ export default function InvestmentPack({ packItems, data, instruments }) {
     );
   }
 
-  const findItem    = (key) => packItems.find(item => item.key === key);
-  const showYieldCurve     = !!findItem('yield-curve');
-  const showInflation      = !!findItem('inflation-linked');
-  const fraKeys            = packItems.filter(item => item.key === 'jibar-fra' || item.key === 'zaronia-fra').map(i => i.key);
+  const findItem       = (key) => packItems.find(item => item.key === key);
+  const showYieldCurve = !!findItem('yield-curve');
+  const showInflation  = !!findItem('inflation-linked');
+  const fraKeys        = packItems.filter(item => item.key === 'jibar-fra' || item.key === 'zaronia-fra').map(i => i.key);
+  const myChartItems   = packItems.filter(item => item.key.startsWith('my-chart-'));
 
   return (
     <div>
@@ -68,6 +70,24 @@ export default function InvestmentPack({ packItems, data, instruments }) {
             <MarketPricing data={data} instruments={instruments} packMode packKeys={fraKeys} />
           </div>
         )}
+
+        {myChartItems.map(item => {
+          const cfg = item.config;
+          const chart = { id: cfg.chartId, name: cfg.chartName, series: cfg.series };
+          return (
+            <div key={item.key} className={styles.chartSection}>
+              <h3 style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 700, margin: '0 0 12px 0' }}>{cfg.chartName}</h3>
+              <ChartInner
+                chart={chart}
+                data={data}
+                period={cfg.period}
+                customFrom={cfg.customFrom}
+                customTo={cfg.customTo}
+                height={300}
+              />
+            </div>
+          );
+        })}
 
       </div>
     </div>

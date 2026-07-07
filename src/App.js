@@ -119,7 +119,7 @@ export default function App() {
             {activeTab === 'Yield Curve'     && <YieldCurve     data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Rate History'    && <RateHistory    data={data} groups={groups} />}
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
-            {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} />}
+            {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} data={data} instruments={instruments} />}
           </main>
         </>

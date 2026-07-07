@@ -4,6 +4,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, LabelList,
 } from 'recharts';
 import { supabase } from '../utils/supabase';
+import AddToPackButton from './AddToPackButton';
 import styles from './MyCharts.module.css';
 
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
@@ -67,7 +68,7 @@ function EndLabel({ viewBox, value, color, unit, index, total }) {
   );
 }
 
-function ChartInner({ chart, data, period, customFrom, customTo, height }) {
+export function ChartInner({ chart, data, period, customFrom, customTo, height }) {
   const chartData = useMemo(() =>
     buildChartData(data.dataRows, chart.series, period, customFrom, customTo),
     [data.dataRows, chart.series, period, customFrom, customTo]
@@ -154,7 +155,7 @@ function PeriodSelector({ period, setPeriod, customFrom, setCustomFrom, customTo
   );
 }
 
-function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, onPeriodChange, onDragStart, onDragOver, onDrop, isDragOver }) {
+function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, onPeriodChange, onDragStart, onDragOver, onDrop, isDragOver, onTogglePack, isInPack }) {
   const [period, setPeriod] = useState(layout?.period || chart.timeframe || '1Y');
   const [customFrom, setCustomFrom] = useState(layout?.customFrom || '');
   const [customTo, setCustomTo] = useState(layout?.customTo || '');
@@ -187,6 +188,19 @@ function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, o
           <PeriodSelector period={period} setPeriod={handlePeriodChange} customFrom={customFrom} setCustomFrom={handleFromChange} customTo={customTo} setCustomTo={handleToChange} />
           <button className={styles.iconBtn} onClick={() => onToggleWide(chart.id)} title={isWide ? 'Half width' : 'Full width'}>{isWide ? '⬛' : '⬜'}</button>
           <button className={styles.iconBtn} onClick={() => onMaximize({ chart, period, customFrom, customTo })} title="Maximise">⛶</button>
+          {onTogglePack && (
+            <AddToPackButton
+              isInPack={isInPack}
+              onToggle={() => onTogglePack(`my-chart-${chart.id}`, {
+                chartId: chart.id,
+                chartName: chart.name,
+                series: chart.series,
+                period,
+                customFrom,
+                customTo,
+              })}
+            />
+          )}
           <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>{deleting ? '…' : '🗑'}</button>
         </div>
       </div>
@@ -223,7 +237,7 @@ function MaximizedChart({ item, data, onClose }) {
   );
 }
 
-export default function MyCharts({ data, refreshTrigger }) {
+export default function MyCharts({ data, refreshTrigger, onTogglePack, isInPack }) {
   const [charts, setCharts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState(() => {
@@ -341,6 +355,8 @@ export default function MyCharts({ data, refreshTrigger }) {
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             isDragOver={dragOverId === chart.id}
+            onTogglePack={onTogglePack}
+            isInPack={isInPack?.(`my-chart-${chart.id}`)}
           />
         ))}
       </div>
