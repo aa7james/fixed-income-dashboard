@@ -1,0 +1,135 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 10px 0;
+}
+
+.emptyHint {
+  font-size: 14px;
+  color: #475569;
+  margin: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #475569;
+  margin: 4px 0 0 0;
+}
+
+.printBtn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid #60a5fa;
+  background: rgba(96,165,250,0.1);
+  color: #60a5fa;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.printBtn:hover {
+  background: rgba(96,165,250,0.2);
+}
+
+.packContent {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.printHeader {
+  display: none;
+}
+
+.chartSection {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+/* ── Print styles ── */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 15mm;
+  }
+
+  /* Hide everything on the page */
+  body > * { display: none !important; }
+
+  /* Show only the root app wrapper, then only the pack content */
+  #root { display: block !important; }
+  #root > * { display: none !important; }
+
+  /* Target the pack content specifically */
+  #investment-pack-content {
+    display: block !important;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    color: #000;
+    background: #fff;
+  }
+
+  .printHeader {
+    display: block;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+  }
+
+  .printTitle {
+    font-size: 20px;
+    font-weight: 700;
+    color: #000;
+    margin: 0 0 4px 0;
+  }
+
+  .printDate {
+    font-size: 12px;
+    color: #555;
+    margin: 0;
+  }
+
+  .chartSection {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
+    padding: 16px !important;
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+
+  /* Force dark chart text to black for print */
+  text, tspan {
+    fill: #333 !important;
+  }
+}
