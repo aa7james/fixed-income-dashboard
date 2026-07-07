@@ -23,26 +23,31 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
   const [chartRefresh, setChartRefresh] = useState(0);
-  const [packItems, setPackItems] = useState([]);
-  // packItems: [{ key: string, config: object }]
+  const [packItems, setPackItems] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('investmentPack') || '[]'); } catch { return []; }
+  });
+
+  const savePack = (items) => {
+    setPackItems(items);
+    localStorage.setItem('investmentPack', JSON.stringify(items));
+  };
 
   const togglePack = (key, config = {}) =>
-    setPackItems(prev => {
-      const exists = prev.find(item => item.key === key);
+    savePack((() => {
+      const exists = packItems.find(item => item.key === key);
       return exists
-        ? prev.filter(item => item.key !== key)
-        : [...prev, { key, config }];
-    });
+        ? packItems.filter(item => item.key !== key)
+        : [...packItems, { key, config }];
+    })());
 
-  const reorderPack = (fromKey, toKey) =>
-    setPackItems(prev => {
-      const from = prev.findIndex(i => i.key === fromKey);
-      const to   = prev.findIndex(i => i.key === toKey);
-      if (from === -1 || to === -1 || from === to) return prev;
-      const next = [...prev];
-      next.splice(to, 0, next.splice(from, 1)[0]);
-      return next;
-    });
+  const reorderPack = (fromKey, toKey) => {
+    const from = packItems.findIndex(i => i.key === fromKey);
+    const to   = packItems.findIndex(i => i.key === toKey);
+    if (from === -1 || to === -1 || from === to) return;
+    const next = [...packItems];
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    savePack(next);
+  };
 
   const isInPack = (key) => packItems.some(item => item.key === key);
 
