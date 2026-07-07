@@ -5,7 +5,7 @@ import MarketPricing from './MarketPricing';
 import { ChartInner } from './MyCharts';
 import styles from './InvestmentPack.module.css';
 
-export default function InvestmentPack({ packItems, data, instruments }) {
+export default function InvestmentPack({ packItems, onTogglePack, data, instruments }) {
   const printRef = useRef();
 
   const handlePrint = () => window.print();
@@ -50,41 +50,44 @@ export default function InvestmentPack({ packItems, data, instruments }) {
 
         {showYieldCurve && (
           <div className={styles.chartSection}>
-            <YieldCurve
-              data={data}
-              instruments={instruments}
-              packMode
-              packConfig={findItem('yield-curve')?.config}
-            />
+            <div className={styles.sectionHeader}>
+              <span />
+              <button className={styles.removeBtn} onClick={() => onTogglePack('yield-curve')}>✕ Remove</button>
+            </div>
+            <YieldCurve data={data} instruments={instruments} packMode packConfig={findItem('yield-curve')?.config} />
           </div>
         )}
 
         {showInflation && (
           <div className={styles.chartSection}>
+            <div className={styles.sectionHeader}>
+              <span />
+              <button className={styles.removeBtn} onClick={() => onTogglePack('inflation-linked')}>✕ Remove</button>
+            </div>
             <InflationLinkedBonds />
           </div>
         )}
 
-        {fraKeys.length > 0 && (
-          <div className={styles.chartSection}>
-            <MarketPricing data={data} instruments={instruments} packMode packKeys={fraKeys} />
+        {fraKeys.map(key => (
+          <div key={key} className={styles.chartSection}>
+            <div className={styles.sectionHeader}>
+              <span />
+              <button className={styles.removeBtn} onClick={() => onTogglePack(key)}>✕ Remove</button>
+            </div>
+            <MarketPricing data={data} instruments={instruments} packMode packKeys={[key]} />
           </div>
-        )}
+        ))}
 
         {myChartItems.map(item => {
           const cfg = item.config;
           const chart = { id: cfg.chartId, name: cfg.chartName, series: cfg.series };
           return (
             <div key={item.key} className={styles.chartSection}>
-              <h3 style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 700, margin: '0 0 12px 0' }}>{cfg.chartName}</h3>
-              <ChartInner
-                chart={chart}
-                data={data}
-                period={cfg.period}
-                customFrom={cfg.customFrom}
-                customTo={cfg.customTo}
-                height={300}
-              />
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>{cfg.chartName}</h3>
+                <button className={styles.removeBtn} onClick={() => onTogglePack(item.key)}>✕ Remove</button>
+              </div>
+              <ChartInner chart={chart} data={data} period={cfg.period} customFrom={cfg.customFrom} customTo={cfg.customTo} height={300} />
             </div>
           );
         })}

@@ -120,7 +120,7 @@ export default function App() {
             {activeTab === 'Rate History'    && <RateHistory    data={data} groups={groups} />}
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
             {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
-            {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} data={data} instruments={instruments} />}
+            {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} data={data} instruments={instruments} />}
           </main>
         </>
       )}
