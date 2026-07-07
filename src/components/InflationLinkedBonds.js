@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceDot, Customized,
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceDot,
 } from 'recharts';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
@@ -33,39 +33,6 @@ const CustomTooltip = ({ active, payload }) => {
     </div>
   );
 };
-
-function xTick(years) {
-  return `${Math.round(years)}y`;
-}
-
-// Draws a filled polygon between the nominal and real yield curves
-function ImpliedInflationFill({ xAxisMap, yAxisMap, data }) {
-  const xAxis = xAxisMap && Object.values(xAxisMap)[0];
-  const yAxis = yAxisMap && Object.values(yAxisMap)[0];
-  if (!xAxis || !yAxis) return null;
-
-  const overlap = data.filter(d => d.nominal_yield != null && d.real_yield != null);
-  if (overlap.length < 2) return null;
-
-  const toSvg = d => ({
-    nx: xAxis.scale(d.years_to_maturity),
-    ny: yAxis.scale(d.nominal_yield),
-    ry: yAxis.scale(d.real_yield),
-  });
-
-  const pts = overlap.map(toSvg);
-
-  // Polygon: nominal points left→right, then real points right→left
-  const top    = pts.map(p => `${p.nx},${p.ny}`).join(' ');
-  const bottom = [...pts].reverse().map(p => `${p.nx},${p.ry}`).join(' ');
-
-  return (
-    <polygon
-      points={`${top} ${bottom}`}
-      fill="rgba(30,64,175,0.45)"
-    />
-  );
-}
 
 export default function InflationLinkedBonds() {
   const [rows, setRows] = useState([]);
@@ -113,7 +80,7 @@ export default function InflationLinkedBonds() {
             <span className={styles.dot} style={{ background: '#2dd4bf' }} /> Real yield
           </span>
           <span className={styles.legendItem}>
-            <span className={styles.dot} style={{ background: 'rgba(30,64,175,0.6)', borderRadius: 2 }} /> Implied inflation
+            <span className={styles.dot} style={{ background: 'rgba(30,64,175,0.75)', borderRadius: 2 }} /> Implied inflation
           </span>
         </div>
       </div>
@@ -127,13 +94,13 @@ export default function InflationLinkedBonds() {
             type="number"
             domain={['dataMin', 'dataMax']}
             ticks={ticks}
-            tickFormatter={xTick}
+            tickFormatter={v => `${Math.round(v)}y`}
             tick={{ fill: '#64748b', fontSize: 10 }}
             label={{ value: 'Years to Maturity', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
           />
 
           <YAxis
-            domain={['auto', 'auto']}
+            domain={[0, 'auto']}
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={52}
@@ -141,9 +108,19 @@ export default function InflationLinkedBonds() {
 
           <Tooltip content={<CustomTooltip />} />
 
-          {/* Custom SVG polygon fills only between the two curves */}
-          <Customized component={(props) => <ImpliedInflationFill {...props} data={rows} />} />
+          {/* Implied inflation: filled area from 0 upward */}
+          <Area
+            type="monotone"
+            dataKey="implied_inflation"
+            name="Implied Inflation"
+            fill="rgba(15,40,120,0.85)"
+            stroke="none"
+            isAnimationActive={false}
+            connectNulls={false}
+            legendType="none"
+          />
 
+          {/* Lines on top */}
           <Line
             type="monotone"
             dataKey="nominal_yield"
