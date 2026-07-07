@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceDot,
+  Tooltip, ResponsiveContainer, ReferenceDot, Label,
 } from 'recharts';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
@@ -87,7 +87,7 @@ export default function InflationLinkedBonds() {
 
       <ResponsiveContainer width="100%" height={380}>
         <ComposedChart data={rows} margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
 
           <XAxis
             dataKey="years_to_maturity"
@@ -153,7 +153,13 @@ export default function InflationLinkedBonds() {
               fill="#4ade80"
               stroke="#0f172a"
               strokeWidth={1}
-            />
+            >
+              <Label
+                value={`${r.nominal_bond?.replace(' Bond', '')}  ${Number(r.nominal_yield).toFixed(2)}%`}
+                position="top"
+                style={{ fill: '#4ade80', fontSize: 9, fontWeight: 600 }}
+              />
+            </ReferenceDot>
           ))}
           {knots.map(r => r.is_real_knot && r.real_yield != null && (
             <ReferenceDot
@@ -164,7 +170,13 @@ export default function InflationLinkedBonds() {
               fill="#2dd4bf"
               stroke="#0f172a"
               strokeWidth={1}
-            />
+            >
+              <Label
+                value={`${r.real_bond?.replace(' Bond', '')}  ${Number(r.real_yield).toFixed(2)}%`}
+                position="bottom"
+                style={{ fill: '#2dd4bf', fontSize: 9, fontWeight: 600 }}
+              />
+            </ReferenceDot>
           ))}
         </ComposedChart>
       </ResponsiveContainer>
