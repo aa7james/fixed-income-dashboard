@@ -34,6 +34,7 @@ export default function App() {
 
   const togglePack = (key, config = {}) =>
     savePack((() => {
+      // Yield curve uses unique timestamp keys so always add; others toggle
       const exists = packItems.find(item => item.key === key);
       return exists
         ? packItems.filter(item => item.key !== key)

@@ -219,15 +219,16 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
           <p className={styles.sub}>Fixed-rate instruments only · Tenor vs Yield</p>
         </div>
         {!packMode && onTogglePack && (
-          <AddToPackButton
-            isInPack={isInPack?.('yield-curve')}
-            onToggle={() => onTogglePack('yield-curve', {
+          <button
+            onClick={() => onTogglePack(`yield-curve-${Date.now()}`, {
               activeCategories,
               tenorRange,
-              // Save comparison dates but NOT the primary (latest) date — it updates automatically
               comparisonDates: selectedDates.slice(1),
             })}
-          />
+            style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
+          >
+            + Add to Pack
+          </button>
         )}
       </div>
 

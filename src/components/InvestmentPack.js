@@ -81,7 +81,7 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
           const key = item.key;
           const cfg = item.config;
 
-          if (key === 'yield-curve') return (
+          if (key.startsWith('yield-curve')) return (
             <PackSection key={key} {...sectionProps(key)}>
               <YieldCurve data={data} instruments={instruments} packMode packConfig={cfg} />
             </PackSection>
