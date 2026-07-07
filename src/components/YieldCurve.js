@@ -333,12 +333,14 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
         <div className={styles.empty}>Enable at least one category above.</div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, marginBottom: 4 }}>
-        {!packMode && onTogglePack && (
-          <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
-        )}
-      </div>
-      <InflationLinkedBonds />
+      {!packMode && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, marginBottom: 4 }}>
+            <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
+          </div>
+          <InflationLinkedBonds />
+        </>
+      )}
     </div>
   );
 }
