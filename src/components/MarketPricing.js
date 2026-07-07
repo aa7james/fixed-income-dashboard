@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import AddToPackButton from './AddToPackButton';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LabelList,
@@ -63,16 +64,22 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function FraCurveChart({ title, data }) {
+function FraCurveChart({ title, data, packKey, isInPack, onTogglePack }) {
   if (!data.length) return null;
 
   const barData = data.slice(1); // exclude base from bar chart
 
   return (
     <div className={styles.chartCard}>
-      <h3 className={styles.chartTitle}>{title}</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h3 className={styles.chartTitle} style={{ margin: 0 }}>{title}</h3>
+        {onTogglePack && (
+          <AddToPackButton isInPack={isInPack} onToggle={() => onTogglePack(packKey)} />
+        )}
+      </div>
 
       {/* Summary table */}
+
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
@@ -171,7 +178,7 @@ function FraCurveChart({ title, data }) {
   );
 }
 
-export default function MarketPricing({ data, instruments }) {
+export default function MarketPricing({ data, instruments, onTogglePack, isInPack, packMode = false, packKeys = [] }) {
   const latestRow = useMemo(() => {
     if (!data?.dataRows?.length) return null;
     return data.dataRows[data.dataRows.length - 1];
@@ -208,8 +215,24 @@ export default function MarketPricing({ data, instruments }) {
       </div>
 
       <div className={styles.grid}>
-        {jibarData.length > 0   && <FraCurveChart title="JIBAR FRA Curve"   data={jibarData} />}
-        {zaroniaData.length > 0 && <FraCurveChart title="Zaronia FRA Curve" data={zaroniaData} />}
+        {jibarData.length > 0 && (!packMode || packKeys.includes('jibar-fra')) && (
+          <FraCurveChart
+            title="JIBAR FRA Curve"
+            data={jibarData}
+            packKey="jibar-fra"
+            isInPack={isInPack?.('jibar-fra')}
+            onTogglePack={packMode ? null : onTogglePack}
+          />
+        )}
+        {zaroniaData.length > 0 && (!packMode || packKeys.includes('zaronia-fra')) && (
+          <FraCurveChart
+            title="Zaronia FRA Curve"
+            data={zaroniaData}
+            packKey="zaronia-fra"
+            isInPack={isInPack?.('zaronia-fra')}
+            onTogglePack={packMode ? null : onTogglePack}
+          />
+        )}
       </div>
     </div>
   );

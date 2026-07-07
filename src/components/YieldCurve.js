@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import InflationLinkedBonds from './InflationLinkedBonds';
+import AddToPackButton from './AddToPackButton';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -131,16 +132,23 @@ function formatTenor(x) {
   return `${x}y`;
 }
 
-export default function YieldCurve({ data, instruments }) {
+export default function YieldCurve({ data, instruments, packItems = [], onTogglePack, isInPack, packMode = false, packConfig = null }) {
   const allDates = data.dataRows.map(r => r.dateStr);
   const latest = data.dataRows[data.dataRows.length - 1];
 
-  const [selectedDates, setSelectedDates] = useState([latest?.dateStr].filter(Boolean));
+  const defaultCategories = Object.fromEntries(Object.entries(CURVE_CATEGORIES).map(([k, v]) => [k, v.defaultOn]));
+
+  // In packMode, derive state from the saved config (but always use latest date as primary)
+  const initCategories = packMode && packConfig ? packConfig.activeCategories : defaultCategories;
+  const initTenor      = packMode && packConfig ? packConfig.tenorRange : 'Full Curve';
+  const initDates      = packMode && packConfig
+    ? [latest?.dateStr, ...(packConfig.comparisonDates || [])].filter(Boolean)
+    : [latest?.dateStr].filter(Boolean);
+
+  const [selectedDates, setSelectedDates] = useState(initDates);
   const [inputDate, setInputDate] = useState('');
-  const [activeCategories, setActiveCategories] = useState(
-    () => Object.fromEntries(Object.entries(CURVE_CATEGORIES).map(([k, v]) => [k, v.defaultOn]))
-  );
-  const [tenorRange, setTenorRange] = useState('Full Curve');
+  const [activeCategories, setActiveCategories] = useState(initCategories);
+  const [tenorRange, setTenorRange] = useState(initTenor);
 
   const addDate = () => {
     const match = allDates.find(d => d === inputDate || d.startsWith(inputDate));
@@ -205,65 +213,82 @@ export default function YieldCurve({ data, instruments }) {
 
   return (
     <div>
-      <h2 className={styles.heading}>SA Fixed Income Yield Curve</h2>
-      <p className={styles.sub}>Fixed-rate instruments only · Tenor vs Yield</p>
-
-      {/* Tenor range selector */}
-      <div className={styles.categoryBar}>
-        {TENOR_RANGES.map(r => (
-          <button
-            key={r.label}
-            className={`${styles.catBtn} ${tenorRange === r.label ? styles.catBtnOn : ''}`}
-            style={tenorRange === r.label ? { borderColor: '#94a3b8', color: '#e2e8f0', background: '#94a3b822' } : {}}
-            onClick={() => setTenorRange(r.label)}
-            title={r.description}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Category toggles */}
-      <div className={styles.categoryBar}>
-        {Object.entries(CURVE_CATEGORIES).map(([cat, cfg]) => (
-          <button
-            key={cat}
-            className={`${styles.catBtn} ${activeCategories[cat] ? styles.catBtnOn : ''}`}
-            style={activeCategories[cat] ? { borderColor: cfg.color, color: cfg.color, background: cfg.color + '22' } : {}}
-            onClick={() => toggleCategory(cat)}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* Date selector */}
-      <div className={styles.dateRow}>
-        <div className={styles.chips}>
-          {selectedDates.map((d, i) => (
-            <span key={d} className={styles.chip} style={{ borderColor: DATE_COLORS[i % DATE_COLORS.length] }}>
-              <span style={{ color: DATE_COLORS[i % DATE_COLORS.length] }}>{fmtDate(d)}</span>
-              <button className={styles.chipX} onClick={() => removeDate(d)}>×</button>
-            </span>
-          ))}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h2 className={styles.heading}>SA Fixed Income Yield Curve</h2>
+          <p className={styles.sub}>Fixed-rate instruments only · Tenor vs Yield</p>
         </div>
-        {selectedDates.length < 3 && (
-          <div className={styles.addRow}>
-            <input
-              className={styles.dateInput}
-              list="ycDatelist"
-              placeholder="Add comparison date…"
-              value={inputDate}
-              onChange={e => setInputDate(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addDate()}
-            />
-            <datalist id="ycDatelist">
-              {allDates.slice(-500).map(d => <option key={d} value={d} />)}
-            </datalist>
-            <button className={styles.addBtn} onClick={addDate}>+ Add</button>
-          </div>
+        {!packMode && onTogglePack && (
+          <AddToPackButton
+            isInPack={isInPack?.('yield-curve')}
+            onToggle={() => onTogglePack('yield-curve', {
+              activeCategories,
+              tenorRange,
+              // Save comparison dates but NOT the primary (latest) date — it updates automatically
+              comparisonDates: selectedDates.slice(1),
+            })}
+          />
         )}
       </div>
+
+      {!packMode && (<>
+        {/* Tenor range selector */}
+        <div className={styles.categoryBar}>
+          {TENOR_RANGES.map(r => (
+            <button
+              key={r.label}
+              className={`${styles.catBtn} ${tenorRange === r.label ? styles.catBtnOn : ''}`}
+              style={tenorRange === r.label ? { borderColor: '#94a3b8', color: '#e2e8f0', background: '#94a3b822' } : {}}
+              onClick={() => setTenorRange(r.label)}
+              title={r.description}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Category toggles */}
+        <div className={styles.categoryBar}>
+          {Object.entries(CURVE_CATEGORIES).map(([cat, cfg]) => (
+            <button
+              key={cat}
+              className={`${styles.catBtn} ${activeCategories[cat] ? styles.catBtnOn : ''}`}
+              style={activeCategories[cat] ? { borderColor: cfg.color, color: cfg.color, background: cfg.color + '22' } : {}}
+              onClick={() => toggleCategory(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Date selector */}
+        <div className={styles.dateRow}>
+          <div className={styles.chips}>
+            {selectedDates.map((d, i) => (
+              <span key={d} className={styles.chip} style={{ borderColor: DATE_COLORS[i % DATE_COLORS.length] }}>
+                <span style={{ color: DATE_COLORS[i % DATE_COLORS.length] }}>{fmtDate(d)}</span>
+                <button className={styles.chipX} onClick={() => removeDate(d)}>×</button>
+              </span>
+            ))}
+          </div>
+          {selectedDates.length < 3 && (
+            <div className={styles.addRow}>
+              <input
+                className={styles.dateInput}
+                list="ycDatelist"
+                placeholder="Add comparison date…"
+                value={inputDate}
+                onChange={e => setInputDate(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addDate()}
+              />
+              <datalist id="ycDatelist">
+                {allDates.slice(-500).map(d => <option key={d} value={d} />)}
+              </datalist>
+              <button className={styles.addBtn} onClick={addDate}>+ Add</button>
+            </div>
+          )}
+        </div>
+      </>)}
 
       {filteredSeries.length > 0 ? (
         <div className={styles.chartWrap}>
@@ -308,6 +333,11 @@ export default function YieldCurve({ data, instruments }) {
         <div className={styles.empty}>Enable at least one category above.</div>
       )}
 
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, marginBottom: 4 }}>
+        {!packMode && onTogglePack && (
+          <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
+        )}
+      </div>
       <InflationLinkedBonds />
     </div>
   );

@@ -8,10 +8,11 @@ import RateHistory from './components/RateHistory';
 import ChartBuilder from './components/ChartBuilder';
 import MyCharts from './components/MyCharts';
 import MarketPricing from './components/MarketPricing';
+import InvestmentPack from './components/InvestmentPack';
 import DataUploader from './components/DataUploader';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Rate History', 'Chart Builder', 'My Charts'];
+const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Rate History', 'Chart Builder', 'My Charts', 'Investment Pack'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -22,6 +23,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
   const [chartRefresh, setChartRefresh] = useState(0);
+  const [packItems, setPackItems] = useState([]);
+  // packItems: [{ key: string, config: object }]
+
+  const togglePack = (key, config = {}) =>
+    setPackItems(prev => {
+      const exists = prev.find(item => item.key === key);
+      return exists
+        ? prev.filter(item => item.key !== key)
+        : [...prev, { key, config }];
+    });
+
+  const isInPack = (key) => packItems.some(item => item.key === key);
 
   const applyData = useCallback((parsed, instrumentList) => {
     setData(parsed);
@@ -101,12 +114,13 @@ export default function App() {
           </nav>
 
           <main className={styles.main}>
-            {activeTab === 'Latest Rates'   && <LatestRates    data={data} groups={groups} />}
-            {activeTab === 'Market Pricing' && <MarketPricing  data={data} instruments={instruments} />}
-            {activeTab === 'Yield Curve'   && <YieldCurve    data={data} instruments={instruments} />}
-            {activeTab === 'Rate History'  && <RateHistory   data={data} groups={groups} />}
-            {activeTab === 'Chart Builder' && <ChartBuilder  data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
-            {activeTab === 'My Charts'     && <MyCharts      data={data} refreshTrigger={chartRefresh} />}
+            {activeTab === 'Latest Rates'    && <LatestRates    data={data} groups={groups} />}
+            {activeTab === 'Market Pricing'  && <MarketPricing  data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
+            {activeTab === 'Yield Curve'     && <YieldCurve     data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
+            {activeTab === 'Rate History'    && <RateHistory    data={data} groups={groups} />}
+            {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
+            {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} />}
+            {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} data={data} instruments={instruments} />}
           </main>
         </>
       )}
