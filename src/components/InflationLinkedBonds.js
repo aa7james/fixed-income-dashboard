@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceDot,
+  Tooltip, ResponsiveContainer, ReferenceDot,
 } from 'recharts';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
@@ -62,15 +62,6 @@ export default function InflationLinkedBonds() {
   if (loading) return <p className={styles.msg}>Loading yield curve…</p>;
   if (error)   return <p className={styles.msg} style={{ color: '#f87171' }}>Error: {error}</p>;
   if (!rows.length) return <p className={styles.msg}>No data available.</p>;
-
-  // Latest date for the header
-  const latestDate = rows[0]?.maturity_date
-    ? (() => {
-        // find the max date from the source (all rows share same ref date)
-        const d = rows[0].maturity_date;
-        return d ? `Data as at ${d.slice(0, 7)}` : '';
-      })()
-    : '';
 
   // For stacked areas: bottom transparent layer = real_yield, top dark layer = implied_inflation
   // recharts stacking adds the values, so bottom = real_yield, top = implied_inflation
