@@ -107,11 +107,21 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 const CustomDot = (props) => {
-  const { cx, cy, fill } = props;
+  const { cx, cy, fill, payload } = props;
   if (!cx || !cy) return null;
   return (
     <g>
       <circle cx={cx} cy={cy} r={4} fill={fill} stroke="#0f172a" strokeWidth={1} />
+      <text
+        x={cx}
+        y={cy - 9}
+        textAnchor="middle"
+        fill={fill}
+        fontSize={9}
+        fontWeight={600}
+      >
+        {payload?.label}
+      </text>
     </g>
   );
 };
@@ -259,7 +269,7 @@ export default function YieldCurve({ data, instruments }) {
         <div className={styles.chartWrap}>
           <ResponsiveContainer width="100%" height={440}>
             <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
               <XAxis
                 dataKey="x"
                 type="number"
