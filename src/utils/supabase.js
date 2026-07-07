@@ -41,6 +41,17 @@ export async function loadFromSupabase() {
   return transformData(allRows);
 }
 
+// Fetch interpolated yield curve (nominal + real + implied inflation)
+export async function loadYieldCurveInterpolated() {
+  const { data, error } = await supabase
+    .from('yield_curve_interpolated')
+    .select('*')
+    .order('maturity_date', { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 function transformData(rows) {
   if (!rows || rows.length === 0) return { columns: [], dataRows: [] };
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import InflationLinkedBonds from './InflationLinkedBonds';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -296,6 +297,8 @@ export default function YieldCurve({ data, instruments }) {
       ) : (
         <div className={styles.empty}>Enable at least one category above.</div>
       )}
+
+      <InflationLinkedBonds />
     </div>
   );
 }
