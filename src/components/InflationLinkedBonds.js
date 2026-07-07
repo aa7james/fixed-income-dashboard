@@ -63,17 +63,16 @@ export default function InflationLinkedBonds() {
   if (error)   return <p className={styles.msg} style={{ color: '#f87171' }}>Error: {error}</p>;
   if (!rows.length) return <p className={styles.msg}>No data available.</p>;
 
-  // For stacked areas: bottom transparent layer = real_yield, top dark layer = implied_inflation
-  // recharts stacking adds the values, so bottom = real_yield, top = implied_inflation
-  // When real_yield is null, neither area renders for that point.
-
-  // X-axis ticks: spread them out (every ~2y)
-  const ticks = rows
-    .filter(r => Math.round(r.years_to_maturity * 2) % 4 === 0)
-    .map(r => r.years_to_maturity)
-    .filter((v, i, a) => a.indexOf(v) === i);
-
   const knots = rows.filter(r => r.is_nominal_knot || r.is_real_knot);
+
+  // X-axis: one tick per even year, matched to actual data points
+  const ticks = [];
+  for (let y = 2; y <= 28; y += 2) {
+    const closest = rows.reduce((best, r) =>
+      Math.abs(r.years_to_maturity - y) < Math.abs(best.years_to_maturity - y) ? r : best
+    );
+    if (Math.abs(closest.years_to_maturity - y) < 0.25) ticks.push(closest.years_to_maturity);
+  }
 
   return (
     <div className={styles.card}>
@@ -107,7 +106,7 @@ export default function InflationLinkedBonds() {
           />
 
           <YAxis
-            domain={['auto', 'auto']}
+            domain={[2, 'auto']}
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={52}
@@ -115,12 +114,14 @@ export default function InflationLinkedBonds() {
 
           <Tooltip content={<CustomTooltip />} />
 
-          {/* Stacked fill: transparent real_yield base + dark implied_inflation on top */}
+          {/* Stacked fill: card-background real_yield base + dark implied_inflation on top.
+              The bottom area uses the card colour (#1e293b) so the fill only appears
+              between the real yield line and the nominal line. */}
           <Area
             type="monotone"
             dataKey="real_yield"
             stackId="fill"
-            fill="transparent"
+            fill="#1e293b"
             stroke="none"
             isAnimationActive={false}
             connectNulls={false}
