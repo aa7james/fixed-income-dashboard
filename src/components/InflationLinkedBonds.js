@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceDot,
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceDot, Customized,
 } from 'recharts';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   if (!d) return null;
@@ -35,8 +35,36 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 function xTick(years) {
-  if (years < 1) return `${Math.round(years * 12)}m`;
   return `${Math.round(years)}y`;
+}
+
+// Draws a filled polygon between the nominal and real yield curves
+function ImpliedInflationFill({ xAxisMap, yAxisMap, data }) {
+  const xAxis = xAxisMap && Object.values(xAxisMap)[0];
+  const yAxis = yAxisMap && Object.values(yAxisMap)[0];
+  if (!xAxis || !yAxis) return null;
+
+  const overlap = data.filter(d => d.nominal_yield != null && d.real_yield != null);
+  if (overlap.length < 2) return null;
+
+  const toSvg = d => ({
+    nx: xAxis.scale(d.years_to_maturity),
+    ny: yAxis.scale(d.nominal_yield),
+    ry: yAxis.scale(d.real_yield),
+  });
+
+  const pts = overlap.map(toSvg);
+
+  // Polygon: nominal points left→right, then real points right→left
+  const top    = pts.map(p => `${p.nx},${p.ny}`).join(' ');
+  const bottom = [...pts].reverse().map(p => `${p.nx},${p.ry}`).join(' ');
+
+  return (
+    <polygon
+      points={`${top} ${bottom}`}
+      fill="rgba(30,64,175,0.45)"
+    />
+  );
 }
 
 export default function InflationLinkedBonds() {
@@ -65,7 +93,6 @@ export default function InflationLinkedBonds() {
 
   const knots = rows.filter(r => r.is_nominal_knot || r.is_real_knot);
 
-  // X-axis: one tick per even year, matched to actual data points
   const ticks = [];
   for (let y = 2; y <= 28; y += 2) {
     const closest = rows.reduce((best, r) =>
@@ -106,7 +133,7 @@ export default function InflationLinkedBonds() {
           />
 
           <YAxis
-            domain={[2, 'auto']}
+            domain={['auto', 'auto']}
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={52}
@@ -114,31 +141,9 @@ export default function InflationLinkedBonds() {
 
           <Tooltip content={<CustomTooltip />} />
 
-          {/* Stacked fill: card-background real_yield base + dark implied_inflation on top.
-              The bottom area uses the card colour (#1e293b) so the fill only appears
-              between the real yield line and the nominal line. */}
-          <Area
-            type="monotone"
-            dataKey="real_yield"
-            stackId="fill"
-            fill="#1e293b"
-            stroke="none"
-            isAnimationActive={false}
-            connectNulls={false}
-            legendType="none"
-          />
-          <Area
-            type="monotone"
-            dataKey="implied_inflation"
-            stackId="fill"
-            fill="rgba(30,64,175,0.45)"
-            stroke="none"
-            isAnimationActive={false}
-            connectNulls={false}
-            legendType="none"
-          />
+          {/* Custom SVG polygon fills only between the two curves */}
+          <Customized component={(props) => <ImpliedInflationFill {...props} data={rows} />} />
 
-          {/* Lines drawn on top of fill */}
           <Line
             type="monotone"
             dataKey="nominal_yield"
@@ -162,7 +167,6 @@ export default function InflationLinkedBonds() {
             legendType="none"
           />
 
-          {/* Mark actual bond knot points */}
           {knots.map(r => r.is_nominal_knot && r.nominal_yield != null && (
             <ReferenceDot
               key={`n-${r.maturity_date}`}
