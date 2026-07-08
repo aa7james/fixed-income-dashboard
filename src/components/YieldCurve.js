@@ -295,7 +295,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
     bars.sort((a, b) => a.x - b.x);
     return bars;
-  }, [comparisonDates, selectedPresets, latest, data.dataRows, activeCategories, instruments]);
+  }, [comparisonDates, latest, data.dataRows, activeCategories, instruments]);
 
   return (
     <div>
