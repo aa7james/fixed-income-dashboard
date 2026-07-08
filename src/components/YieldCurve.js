@@ -169,7 +169,6 @@ function formatTenor(x) {
 }
 
 export default function YieldCurve({ data, instruments, packItems = [], onTogglePack, isInPack, packMode = false, packConfig = null }) {
-  const allDates = data.dataRows.map(r => r.dateStr);
   const latest = data.dataRows[data.dataRows.length - 1];
 
   const defaultCategories = Object.fromEntries(Object.entries(CURVE_CATEGORIES).map(([k, v]) => [k, v.defaultOn]));
@@ -273,7 +272,6 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
   const spreadData = useMemo(() => {
     if (comparisonDates.length === 0 || !latest) return [];
     const compDateStr = comparisonDates[0];
-    const compPresetLabel = selectedPresets[0];
     const currentRow = data.dataRows.find(r => r.dateStr === latest.dateStr);
     const compRow = data.dataRows.find(r => r.dateStr === compDateStr);
     if (!currentRow || !compRow) return [];
