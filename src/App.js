@@ -27,9 +27,27 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('investmentPack') || '[]'); } catch { return []; }
   });
 
+  // Load pack from Supabase on startup
+  useEffect(() => {
+    import('./utils/supabase').then(({ supabase }) => {
+      supabase.from('investment_pack').select('items').eq('id', 'default').single()
+        .then(({ data: row }) => {
+          if (row?.items?.length > 0) {
+            setPackItems(row.items);
+            localStorage.setItem('investmentPack', JSON.stringify(row.items));
+          }
+        });
+    });
+  }, []);
+
   const savePack = (items) => {
     setPackItems(items);
     localStorage.setItem('investmentPack', JSON.stringify(items));
+    import('./utils/supabase').then(({ supabase }) => {
+      supabase.from('investment_pack')
+        .upsert({ id: 'default', items, updated_at: new Date().toISOString() })
+        .then(() => {});
+    });
   };
 
   const togglePack = (key, config = {}) =>
