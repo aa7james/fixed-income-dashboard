@@ -180,7 +180,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     : (savedPrefs.activeCategories || defaultCategories);
   const initTenor = packMode && packConfig ? packConfig.tenorRange
     : (savedPrefs.tenorRange || 'Full Curve');
-  const initPresets = packMode && packConfig ? []
+  const initPresets = packMode && packConfig ? (packConfig.selectedPresets || [])
     : (savedPrefs.selectedPresets || []);
 
   const [activeCategories, setActiveCategories] = useState(initCategories);
@@ -309,7 +309,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
             onClick={() => onTogglePack(`yield-curve-${Date.now()}`, {
               activeCategories,
               tenorRange,
-              comparisonDates: selectedDates.slice(1),
+              selectedPresets,
             })}
             style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
           >
@@ -434,7 +434,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
       )}
 
       {/* Spread bar chart */}
-      {!packMode && spreadData.length > 0 && (
+      {spreadData.length > 0 && (
         <div className={styles.chartWrap} style={{ marginTop: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
             Spread vs {selectedPresets[0]} — change in yield (bps)
