@@ -189,10 +189,11 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
     return data.dataRows[data.dataRows.length - 1].dateStr || '';
   }, [data]);
 
-  const { jibarFras, zaroniaFras, jibarBase, zaroniaBase } = useMemo(() => {
+  const { jibarFras, zaroniaFras, sofrFras, jibarBase, zaroniaBase, sofrBase } = useMemo(() => {
     const fras = instruments.filter(i => i.category === 'FRAs');
     const jibarFras = fras.filter(i => i.name.toLowerCase().includes('jibar'));
     const zaroniaFras = fras.filter(i => i.name.toLowerCase().includes('zaronia'));
+    const sofrFras = fras.filter(i => i.name.toLowerCase().includes('sofr'));
 
     const jibarBase = instruments.find(i =>
       i.category !== 'FRAs' && i.name.toLowerCase().includes('jibar') && i.name.toLowerCase().includes('3m')
@@ -200,12 +201,16 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
     const zaroniaBase = instruments.find(i =>
       i.category !== 'FRAs' && i.name.toLowerCase() === 'zaronia'
     );
+    const sofrBase = instruments.find(i =>
+      i.category !== 'FRAs' && i.name.toLowerCase() === 'sofr'
+    );
 
-    return { jibarFras, zaroniaFras, jibarBase, zaroniaBase };
+    return { jibarFras, zaroniaFras, sofrFras, jibarBase, zaroniaBase, sofrBase };
   }, [instruments]);
 
   const jibarData   = useMemo(() => buildFraCurveData(jibarFras,   jibarBase,   latestRow), [jibarFras,   jibarBase,   latestRow]);
   const zaroniaData = useMemo(() => buildFraCurveData(zaroniaFras, zaroniaBase, latestRow), [zaroniaFras, zaroniaBase, latestRow]);
+  const sofrData    = useMemo(() => buildFraCurveData(sofrFras,    sofrBase,    latestRow), [sofrFras,    sofrBase,    latestRow]);
 
   return (
     <div className={styles.wrap}>
@@ -230,6 +235,15 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
             data={zaroniaData}
             packKey="zaronia-fra"
             isInPack={isInPack?.('zaronia-fra')}
+            onTogglePack={packMode ? null : onTogglePack}
+          />
+        )}
+        {sofrData.length > 0 && (!packMode || packKeys.includes('sofr-fra')) && (
+          <FraCurveChart
+            title="SOFR FRA Curve"
+            data={sofrData}
+            packKey="sofr-fra"
+            isInPack={isInPack?.('sofr-fra')}
             onTogglePack={packMode ? null : onTogglePack}
           />
         )}
