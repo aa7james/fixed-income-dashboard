@@ -193,7 +193,7 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
     const fras = instruments.filter(i => i.category === 'FRAs');
     const jibarFras = fras.filter(i => i.name.toLowerCase().includes('jibar'));
     const zaroniaFras = fras.filter(i => i.name.toLowerCase().includes('zaronia'));
-    const sofrFras = fras.filter(i => i.name.toLowerCase().includes('sofr'));
+    const sofrFras = fras.filter(i => i.name.toLowerCase().includes('sofr') && i.name !== 'SOFR');
 
     const jibarBase = instruments.find(i =>
       i.category !== 'FRAs' && i.name.toLowerCase().includes('jibar') && i.name.toLowerCase().includes('3m')
@@ -202,7 +202,7 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
       i.category !== 'FRAs' && i.name.toLowerCase() === 'zaronia'
     );
     const sofrBase = instruments.find(i =>
-      i.category !== 'FRAs' && i.name.toLowerCase() === 'sofr'
+      i.name === 'SOFR'
     );
 
     return { jibarFras, zaroniaFras, sofrFras, jibarBase, zaroniaBase, sofrBase };
