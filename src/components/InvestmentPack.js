@@ -93,7 +93,7 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
             </PackSection>
           );
 
-          if (key === 'jibar-fra' || key === 'zaronia-fra') return (
+          if (key === 'jibar-fra' || key === 'zaronia-fra' || key === 'sofr-fra') return (
             <PackSection key={key} {...sectionProps(key)}>
               <MarketPricing data={data} instruments={instruments} packMode packKeys={[key]} />
             </PackSection>
