@@ -1,4 +1,6 @@
 import React, { useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import YieldCurve from './YieldCurve';
 import InflationLinkedBonds from './InflationLinkedBonds';
 import MarketPricing from './MarketPricing';
@@ -19,7 +21,9 @@ function PackSection({ itemKey, onRemove, onDragStart, onDragOver, onDrop, isDra
         <span className={styles.dragHandle} title="Drag to reorder">⠿</span>
         <button className={styles.removeBtn} onClick={() => onRemove(itemKey)}>✕ Remove</button>
       </div>
-      {children}
+      <div className={styles.pdfCapture} data-pdf-section>
+        {children}
+      </div>
     </div>
   );
 }
@@ -45,7 +49,70 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
     isDragOver: dragOverKey === key,
   });
 
-  const handlePrint = () => window.print();
+  const [generating, setGenerating] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    const container = document.getElementById('investment-pack-content');
+    const sections = Array.from(container.querySelectorAll('[data-pdf-section]'));
+    if (!sections.length) return;
+
+    setGenerating(true);
+    try {
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const usableWidth = pageWidth - margin * 2;
+      const titleHeight = 18;
+      const gap = 6;
+      const perPage = 2;
+      const slotHeight = (pageHeight - margin * 2 - titleHeight - gap) / perPage;
+
+      const bgColor = '#0f172a';
+      const drawPageBackground = () => {
+        pdf.setFillColor(15, 23, 42);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      drawPageBackground();
+      pdf.setTextColor(241, 245, 249);
+      pdf.setFontSize(16);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('Fixed Income — Investment Pack', margin, margin + 6);
+      pdf.setFontSize(10);
+      pdf.setFont(undefined, 'normal');
+      pdf.setTextColor(148, 163, 184);
+      const dateStr = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+      pdf.text(`Aylett & Co · ${dateStr}`, margin, margin + 12);
+
+      for (let i = 0; i < sections.length; i++) {
+        const canvas = await html2canvas(sections[i], { backgroundColor: bgColor, scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const ratio = canvas.height / canvas.width;
+
+        let imgWidth = usableWidth;
+        let imgHeight = imgWidth * ratio;
+        if (imgHeight > slotHeight) {
+          imgHeight = slotHeight;
+          imgWidth = imgHeight / ratio;
+        }
+
+        const posInPage = i % perPage;
+        if (i > 0 && posInPage === 0) {
+          pdf.addPage();
+          drawPageBackground();
+        }
+
+        const x = margin + (usableWidth - imgWidth) / 2;
+        const y = margin + titleHeight + posInPage * (slotHeight + gap);
+        pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+      }
+
+      pdf.save(`Fixed-Income-Investment-Pack-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   if (!packItems.length) {
     return (
@@ -67,15 +134,12 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
             {packItems.length} chart{packItems.length !== 1 ? 's' : ''} — drag ⠿ to reorder
           </p>
         </div>
-        <button className={styles.printBtn} onClick={handlePrint}>🖨 Print to PDF</button>
+        <button className={styles.printBtn} onClick={handleDownloadPdf} disabled={generating}>
+          {generating ? '⏳ Generating…' : '⬇ Download PDF'}
+        </button>
       </div>
 
       <div className={styles.packContent} id="investment-pack-content">
-
-        <div className={styles.printHeader}>
-          <h1 className={styles.printTitle}>Fixed Income — Investment Pack</h1>
-          <p className={styles.printDate}>Aylett &amp; Co · {new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-        </div>
 
         {packItems.map(item => {
           const key = item.key;
