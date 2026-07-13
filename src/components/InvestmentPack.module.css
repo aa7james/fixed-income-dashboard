@@ -138,7 +138,14 @@
   /* Hide the app chrome, keep the pack content in normal document flow */
   :global(#app-header), :global(#app-tabs) { display: none !important; }
 
-  body, html { background: #fff; }
+  /* Force browsers to actually print background colors instead of stripping them */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  body, html { background: #0f172a !important; }
 
   main {
     padding: 0 !important;
@@ -148,8 +155,8 @@
 
   :global(#investment-pack-content) {
     width: 100%;
-    color: #000;
-    background: #fff;
+    color: #f1f5f9;
+    background: #0f172a !important;
   }
 
   * {
@@ -160,20 +167,20 @@
     display: block;
     margin-bottom: 24px;
     padding-bottom: 12px;
-    border-bottom: 2px solid #0f172a;
+    border-bottom: 2px solid #334155;
   }
 
   .printTitle {
     font-size: 22px;
     font-weight: 700;
-    color: #0f172a;
+    color: #f1f5f9;
     margin: 0 0 4px 0;
     letter-spacing: -0.3px;
   }
 
   .printDate {
     font-size: 12px;
-    color: #64748b;
+    color: #94a3b8;
     margin: 0;
   }
 
@@ -182,8 +189,8 @@
   }
 
   .chartSection {
-    background: #fff !important;
-    border: 1px solid #e2e8f0 !important;
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
     border-radius: 8px !important;
     padding: 18px !important;
     break-inside: avoid;
@@ -192,24 +199,24 @@
   }
 
   .sectionTitle {
-    color: #0f172a !important;
+    color: #f1f5f9 !important;
     font-size: 16px;
     padding-bottom: 8px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #334155;
     margin-bottom: 12px !important;
   }
 
-  /* Force dark chart text/axis lines to a readable dark grey for print */
+  /* Keep chart text light and readable against the dark background */
   text, tspan {
-    fill: #334155 !important;
+    fill: #94a3b8 !important;
   }
 
   line, path.recharts-cartesian-axis-line, path.recharts-cartesian-axis-tick-line {
-    stroke: #cbd5e1 !important;
+    stroke: #475569 !important;
   }
 
   .recharts-cartesian-grid-horizontal line,
   .recharts-cartesian-grid-vertical line {
-    stroke: #f1f5f9 !important;
+    stroke: #1e293b !important;
   }
 }
