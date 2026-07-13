@@ -23,6 +23,18 @@
   gap: 12px;
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lastUpdated {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
 .logo { font-size: 28px; }
 
 .title {

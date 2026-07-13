@@ -28,7 +28,7 @@ export async function loadFromSupabase() {
   while (hasMore) {
     const { data, error } = await supabase
       .from('bond_data')
-      .select('date, data')
+      .select('date, data, updated_at')
       .order('date', { ascending: true })
       .range(from, from + chunkSize - 1);
 
@@ -39,6 +39,19 @@ export async function loadFromSupabase() {
   }
 
   return transformData(allRows);
+}
+
+// Fetch the most recent updated_at timestamp across all bond_data rows
+export async function loadLastUpdated() {
+  const { data, error } = await supabase
+    .from('bond_data')
+    .select('updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) return null;
+  return data?.updated_at || null;
 }
 
 // Fetch interpolated yield curve (nominal + real + implied inflation)
@@ -70,7 +83,7 @@ function transformData(rows) {
     const [year, month, day] = row.date.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     const dateStr = `${month}/${day}/${year}`;
-    return { date, dateStr, ...(row.data || {}) };
+    return { date, dateStr, updatedAt: row.updated_at, ...(row.data || {}) };
   });
 
   return { columns, dataRows };
