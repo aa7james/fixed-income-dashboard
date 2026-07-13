@@ -134,17 +134,13 @@
     margin: 15mm;
   }
 
-  /* Hide everything on the page */
-  body > * { display: none !important; }
-
-  /* Show only the root app wrapper, then only the pack content */
-  #root { display: block !important; }
-  #root > * { display: none !important; }
+  /* Hide everything on the page except the pack content */
+  body * { visibility: hidden; }
+  #investment-pack-content, #investment-pack-content * { visibility: visible; }
 
   /* Target the pack content specifically */
   #investment-pack-content {
-    display: block !important;
-    position: fixed;
+    position: absolute;
     top: 0; left: 0;
     width: 100%;
     color: #000;
