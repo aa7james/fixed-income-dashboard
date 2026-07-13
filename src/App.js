@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { parseBloombergCSV } from './utils/parseCSV';
-import { loadFromSupabase, loadInstruments } from './utils/supabase';
+import { loadFromSupabase, loadInstruments, loadLastUpdated } from './utils/supabase';
 import { categoriseFromInstruments, categoriseColumns } from './utils/parseCSV';
 import LatestRates from './components/LatestRates';
 import YieldCurve from './components/YieldCurve';
@@ -23,6 +23,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
   const [chartRefresh, setChartRefresh] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [packItems, setPackItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem('investmentPack') || '[]'); } catch { return []; }
   });
@@ -90,9 +91,10 @@ export default function App() {
 
   useEffect(() => {
     setLoadingMsg('Connecting to database…');
-    Promise.all([loadFromSupabase(), loadInstruments()])
-      .then(([parsed, instrumentList]) => {
+    Promise.all([loadFromSupabase(), loadInstruments(), loadLastUpdated()])
+      .then(([parsed, instrumentList, lastUpdatedAt]) => {
         setInstruments(instrumentList);
+        setLastUpdated(lastUpdatedAt);
         if (parsed.dataRows.length > 0) {
           applyData(parsed, instrumentList);
         } else {
@@ -107,7 +109,7 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <header className={styles.header}>
+      <header className={styles.header} id="app-header">
         <div className={styles.headerLeft}>
           <span className={styles.logo}>📈</span>
           <div>
@@ -115,7 +117,18 @@ export default function App() {
             <p className={styles.subtitle}>Aylett &amp; Co</p>
           </div>
         </div>
-        <DataUploader onData={handleCSV} hasData={!!data} />
+        <div className={styles.headerRight}>
+          {lastUpdated && (
+            <span className={styles.lastUpdated}>
+              Data last updated: {new Date(lastUpdated).toLocaleString('en-ZA', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                timeZone: 'Africa/Johannesburg',
+              })}
+            </span>
+          )}
+          <DataUploader onData={handleCSV} hasData={!!data} />
+        </div>
       </header>
 
       {loading && (
@@ -135,7 +148,7 @@ export default function App() {
 
       {data && (
         <>
-          <nav className={styles.tabs}>
+          <nav className={styles.tabs} id="app-tabs">
             {TABS.map(tab => (
               <button
                 key={tab}

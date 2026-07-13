@@ -125,6 +125,7 @@
 @media print {
   .removeBtn, .dragHandle { display: none; }
   .sectionHeader { margin-bottom: 0; }
+  .header { display: none !important; }
 }
 
 /* ── Print styles ── */
@@ -134,14 +135,18 @@
     margin: 15mm;
   }
 
-  /* Hide everything on the page except the pack content */
-  body * { visibility: hidden; }
-  #investment-pack-content, #investment-pack-content * { visibility: visible; }
+  /* Hide the app chrome, keep the pack content in normal document flow */
+  #app-header, #app-tabs { display: none !important; }
 
-  /* Target the pack content specifically */
+  body, html { background: #fff; }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
   #investment-pack-content {
-    position: absolute;
-    top: 0; left: 0;
     width: 100%;
     color: #000;
     background: #fff;
