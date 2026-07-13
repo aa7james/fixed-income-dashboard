@@ -136,7 +136,7 @@
   }
 
   /* Hide the app chrome, keep the pack content in normal document flow */
-  #app-header, #app-tabs { display: none !important; }
+  :global(#app-header), :global(#app-tabs) { display: none !important; }
 
   body, html { background: #fff; }
 
@@ -146,7 +146,7 @@
     margin: 0 !important;
   }
 
-  #investment-pack-content {
+  :global(#investment-pack-content) {
     width: 100%;
     color: #000;
     background: #fff;
