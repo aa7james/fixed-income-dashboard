@@ -61,32 +61,31 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
+      const margin = 8;
       const usableWidth = pageWidth - margin * 2;
-      const titleHeight = 18;
-      const gap = 6;
-      const perPage = 2;
-      const slotHeight = (pageHeight - margin * 2 - titleHeight - gap) / perPage;
+      const titleHeight = 16;
+      const slotHeight = pageHeight - margin * 2 - titleHeight;
 
-      const bgColor = '#0f172a';
-      const drawPageBackground = () => {
+      const dateStr = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      const drawPageChrome = () => {
         pdf.setFillColor(15, 23, 42);
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+        pdf.setTextColor(241, 245, 249);
+        pdf.setFontSize(16);
+        pdf.setFont(undefined, 'bold');
+        pdf.text('Fixed Income — Investment Pack', margin, margin + 6);
+        pdf.setFontSize(10);
+        pdf.setFont(undefined, 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text(`Aylett & Co · ${dateStr}`, margin, margin + 12);
       };
 
-      drawPageBackground();
-      pdf.setTextColor(241, 245, 249);
-      pdf.setFontSize(16);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Fixed Income — Investment Pack', margin, margin + 6);
-      pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
-      pdf.setTextColor(148, 163, 184);
-      const dateStr = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
-      pdf.text(`Aylett & Co · ${dateStr}`, margin, margin + 12);
-
       for (let i = 0; i < sections.length; i++) {
-        const canvas = await html2canvas(sections[i], { backgroundColor: bgColor, scale: 2 });
+        if (i > 0) pdf.addPage();
+        drawPageChrome();
+
+        const canvas = await html2canvas(sections[i], { backgroundColor: '#0f172a', scale: 2 });
         const imgData = canvas.toDataURL('image/png');
         const ratio = canvas.height / canvas.width;
 
@@ -97,14 +96,8 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
           imgWidth = imgHeight / ratio;
         }
 
-        const posInPage = i % perPage;
-        if (i > 0 && posInPage === 0) {
-          pdf.addPage();
-          drawPageBackground();
-        }
-
         const x = margin + (usableWidth - imgWidth) / 2;
-        const y = margin + titleHeight + posInPage * (slotHeight + gap);
+        const y = margin + titleHeight + (slotHeight - imgHeight) / 2;
         pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
       }
 
