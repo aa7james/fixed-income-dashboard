@@ -152,37 +152,64 @@
     background: #fff;
   }
 
+  * {
+    font-family: -apple-system, 'Segoe UI', Arial, sans-serif !important;
+  }
+
   .printHeader {
     display: block;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #000;
-    padding-bottom: 10px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #0f172a;
   }
 
   .printTitle {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    color: #000;
+    color: #0f172a;
     margin: 0 0 4px 0;
+    letter-spacing: -0.3px;
   }
 
   .printDate {
     font-size: 12px;
-    color: #555;
+    color: #64748b;
     margin: 0;
+  }
+
+  .packContent {
+    gap: 20px !important;
   }
 
   .chartSection {
     background: #fff !important;
-    border: 1px solid #ccc !important;
-    border-radius: 4px !important;
-    padding: 16px !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 18px !important;
     break-inside: avoid;
-    margin-bottom: 16px;
+    page-break-inside: avoid;
+    box-shadow: none !important;
   }
 
-  /* Force dark chart text to black for print */
+  .sectionTitle {
+    color: #0f172a !important;
+    font-size: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 12px !important;
+  }
+
+  /* Force dark chart text/axis lines to a readable dark grey for print */
   text, tspan {
-    fill: #333 !important;
+    fill: #334155 !important;
+  }
+
+  line, path.recharts-cartesian-axis-line, path.recharts-cartesian-axis-tick-line {
+    stroke: #cbd5e1 !important;
+  }
+
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #f1f5f9 !important;
   }
 }
