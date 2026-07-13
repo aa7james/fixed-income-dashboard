@@ -104,7 +104,7 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
             return (
               <PackSection key={key} {...sectionProps(key)}>
                 <h3 className={styles.sectionTitle}>{cfg.chartName}</h3>
-                <ChartInner chart={chart} data={data} period={cfg.period} customFrom={cfg.customFrom} customTo={cfg.customTo} height={300} />
+                <ChartInner chart={chart} data={data} period={cfg.period} customFrom={cfg.customFrom} customTo={cfg.customTo} height={450} />
               </PackSection>
             );
           }

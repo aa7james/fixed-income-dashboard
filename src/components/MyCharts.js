@@ -204,7 +204,7 @@ function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, o
           <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>{deleting ? '…' : '🗑'}</button>
         </div>
       </div>
-      <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={isWide ? 340 : 260} />
+      <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={isWide ? 520 : 420} />
     </div>
   );
 }
@@ -231,7 +231,7 @@ function MaximizedChart({ item, data, onClose }) {
             <button className={styles.closeBtn} onClick={onClose} title="Close (Esc)">✕</button>
           </div>
         </div>
-        <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={500} />
+        <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={700} />
       </div>
     </div>
   );
