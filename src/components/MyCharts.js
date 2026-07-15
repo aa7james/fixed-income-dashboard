@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { supabase } from '../utils/supabase';
 import AddToPackButton from './AddToPackButton';
+import TBillPremiumChart from './TBillPremiumChart';
 import styles from './MyCharts.module.css';
 
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
@@ -319,11 +320,14 @@ export default function MyCharts({ data, refreshTrigger, onTogglePack, isInPack 
   if (loading) return <div className={styles.empty}>Loading saved charts…</div>;
 
   if (!charts.length) return (
-    <div className={styles.empty}>
-      <p>No saved charts yet.</p>
-      <p style={{ fontSize: 13, marginTop: 8, color: '#475569' }}>
-        Go to <strong>Chart Builder</strong> to create and save your first chart.
-      </p>
+    <div>
+      <TBillPremiumChart data={data} />
+      <div className={styles.empty}>
+        <p>No saved charts yet.</p>
+        <p style={{ fontSize: 13, marginTop: 8, color: '#475569' }}>
+          Go to <strong>Chart Builder</strong> to create and save your first chart.
+        </p>
+      </div>
     </div>
   );
 
@@ -332,6 +336,8 @@ export default function MyCharts({ data, refreshTrigger, onTogglePack, isInPack 
       {maximized && (
         <MaximizedChart item={maximized} data={data} onClose={() => setMaximized(null)} />
       )}
+
+      <TBillPremiumChart data={data} />
 
       <div className={styles.header}>
         <h2 className={styles.heading}>My Charts</h2>

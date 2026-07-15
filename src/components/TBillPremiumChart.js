@@ -86,7 +86,7 @@ export default function TBillPremiumChart({ data }) {
           {COMPARISONS.map(c => (
             <Line
               key={c.key}
-              type="monotone"
+              type="linear"
               dataKey={c.key}
               name={c.label}
               stroke={c.color}
