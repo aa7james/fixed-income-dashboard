@@ -321,7 +321,7 @@ export default function MyCharts({ data, refreshTrigger, onTogglePack, isInPack 
 
   if (!charts.length) return (
     <div>
-      <TBillPremiumChart data={data} />
+      <TBillPremiumChart data={data} onTogglePack={onTogglePack} isInPack={isInPack?.("tbill-premium")} />
       <div className={styles.empty}>
         <p>No saved charts yet.</p>
         <p style={{ fontSize: 13, marginTop: 8, color: '#475569' }}>
@@ -337,7 +337,7 @@ export default function MyCharts({ data, refreshTrigger, onTogglePack, isInPack 
         <MaximizedChart item={maximized} data={data} onClose={() => setMaximized(null)} />
       )}
 
-      <TBillPremiumChart data={data} />
+      <TBillPremiumChart data={data} onTogglePack={onTogglePack} isInPack={isInPack?.("tbill-premium")} />
 
       <div className={styles.header}>
         <h2 className={styles.heading}>My Charts</h2>

@@ -5,6 +5,7 @@ import YieldCurve from './YieldCurve';
 import InflationLinkedBonds from './InflationLinkedBonds';
 import MarketPricing from './MarketPricing';
 import { ChartInner } from './MyCharts';
+import TBillPremiumChart from './TBillPremiumChart';
 import styles from './InvestmentPack.module.css';
 
 
@@ -147,6 +148,12 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
           if (key === 'inflation-linked') return (
             <PackSection key={key} {...sectionProps(key)}>
               <InflationLinkedBonds />
+            </PackSection>
+          );
+
+          if (key === 'tbill-premium') return (
+            <PackSection key={key} {...sectionProps(key)}>
+              <TBillPremiumChart data={data} />
             </PackSection>
           );
 

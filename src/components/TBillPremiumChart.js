@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
+import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
 
 const TENORS = [
@@ -30,7 +31,7 @@ function nearestRow(dataRows, targetDate) {
   return best;
 }
 
-export default function TBillPremiumChart({ data }) {
+export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
   const dataRows = useMemo(() => data?.dataRows || [], [data]);
   const latest = dataRows[dataRows.length - 1];
 
@@ -62,11 +63,18 @@ export default function TBillPremiumChart({ data }) {
 
   return (
     <div className={styles.chartWrap} style={{ marginTop: 24 }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
-        T-Bill Premiums (ASK)
-      </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-        Premium received on a T-Bill vs. the equivalent Fixed Rate NCD
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+            T-Bill Premiums (ASK)
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+            Premium received on a T-Bill vs. the equivalent Fixed Rate NCD
+          </div>
+        </div>
+        {onTogglePack && (
+          <AddToPackButton isInPack={isInPack} onToggle={() => onTogglePack('tbill-premium')} />
+        )}
       </div>
       <ResponsiveContainer width="100%" height={320}>
         <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
