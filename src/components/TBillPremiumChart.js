@@ -31,7 +31,7 @@ function nearestRow(dataRows, targetDate) {
 }
 
 export default function TBillPremiumChart({ data }) {
-  const dataRows = data?.dataRows || [];
+  const dataRows = useMemo(() => data?.dataRows || [], [data]);
   const latest = dataRows[dataRows.length - 1];
 
   const chartData = useMemo(() => {
