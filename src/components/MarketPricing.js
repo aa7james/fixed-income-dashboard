@@ -189,15 +189,11 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
     return data.dataRows[data.dataRows.length - 1].dateStr || '';
   }, [data]);
 
-  const { jibarFras, zaroniaFras, sofrFras, jibarBase, zaroniaBase, sofrBase } = useMemo(() => {
+  const { zaroniaFras, sofrFras, zaroniaBase, sofrBase } = useMemo(() => {
     const fras = instruments.filter(i => i.category === 'FRAs');
-    const jibarFras = fras.filter(i => i.name.toLowerCase().includes('jibar'));
     const zaroniaFras = fras.filter(i => i.name.toLowerCase().includes('zaronia'));
     const sofrFras = fras.filter(i => i.name.toLowerCase().includes('sofr') && i.name !== 'SOFR');
 
-    const jibarBase = instruments.find(i =>
-      i.category !== 'FRAs' && i.name.toLowerCase().includes('jibar') && i.name.toLowerCase().includes('3m')
-    );
     const zaroniaBase = instruments.find(i =>
       i.category !== 'FRAs' && i.name.toLowerCase() === 'zaronia'
     );
@@ -205,10 +201,9 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
       i.name === 'SOFR'
     );
 
-    return { jibarFras, zaroniaFras, sofrFras, jibarBase, zaroniaBase, sofrBase };
+    return { zaroniaFras, sofrFras, zaroniaBase, sofrBase };
   }, [instruments]);
 
-  const jibarData   = useMemo(() => buildFraCurveData(jibarFras,   jibarBase,   latestRow), [jibarFras,   jibarBase,   latestRow]);
   const zaroniaData = useMemo(() => buildFraCurveData(zaroniaFras, zaroniaBase, latestRow), [zaroniaFras, zaroniaBase, latestRow]);
   const sofrData    = useMemo(() => buildFraCurveData(sofrFras,    sofrBase,    latestRow), [sofrFras,    sofrBase,    latestRow]);
 
@@ -220,15 +215,6 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
       </div>
 
       <div className={styles.grid}>
-        {jibarData.length > 0 && (!packMode || packKeys.includes('jibar-fra')) && (
-          <FraCurveChart
-            title="JIBAR FRA Curve"
-            data={jibarData}
-            packKey="jibar-fra"
-            isInPack={isInPack?.('jibar-fra')}
-            onTogglePack={packMode ? null : onTogglePack}
-          />
-        )}
         {zaroniaData.length > 0 && (!packMode || packKeys.includes('zaronia-fra')) && (
           <FraCurveChart
             title="Zaronia FRA Curve"
