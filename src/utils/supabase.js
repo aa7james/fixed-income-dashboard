@@ -54,6 +54,30 @@ export async function loadLastUpdated() {
   return data?.updated_at || null;
 }
 
+// Ask the Bloomberg PC watcher to run historical_pull.py
+export async function requestDataUpdate() {
+  const { data, error } = await supabase
+    .from('data_update_requests')
+    .insert({ status: 'pending' })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Poll the status of a previously-created update request
+export async function getUpdateRequestStatus(id) {
+  const { data, error } = await supabase
+    .from('data_update_requests')
+    .select('status, message, completed_at')
+    .eq('id', id)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // Fetch interpolated yield curve (nominal + real + implied inflation)
 export async function loadYieldCurveInterpolated() {
   const { data, error } = await supabase

@@ -9,6 +9,7 @@ import MyCharts from './components/MyCharts';
 import MarketPricing from './components/MarketPricing';
 import InvestmentPack from './components/InvestmentPack';
 import DataUploader from './components/DataUploader';
+import RefreshDataButton from './components/RefreshDataButton';
 import styles from './App.module.css';
 
 const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack'];
@@ -88,9 +89,8 @@ export default function App() {
     }
   }, [applyData, instruments]);
 
-  useEffect(() => {
-    setLoadingMsg('Connecting to database…');
-    Promise.all([loadFromSupabase(), loadInstruments(), loadLastUpdated()])
+  const refreshFromSupabase = useCallback(() => {
+    return Promise.all([loadFromSupabase(), loadInstruments(), loadLastUpdated()])
       .then(([parsed, instrumentList, lastUpdatedAt]) => {
         setInstruments(instrumentList);
         setLastUpdated(lastUpdatedAt);
@@ -102,9 +102,13 @@ export default function App() {
       })
       .catch(err => {
         setError(`Could not load data: ${err.message}`);
-      })
-      .finally(() => setLoading(false));
+      });
   }, [applyData]);
+
+  useEffect(() => {
+    setLoadingMsg('Connecting to database…');
+    refreshFromSupabase().finally(() => setLoading(false));
+  }, [refreshFromSupabase]);
 
   return (
     <div className={styles.app}>
@@ -126,6 +130,7 @@ export default function App() {
               })}
             </span>
           )}
+          <RefreshDataButton onUpdated={refreshFromSupabase} />
           <DataUploader onData={handleCSV} hasData={!!data} />
         </div>
       </header>
