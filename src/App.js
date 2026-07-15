@@ -4,7 +4,6 @@ import { loadFromSupabase, loadInstruments, loadLastUpdated } from './utils/supa
 import { categoriseFromInstruments, categoriseColumns } from './utils/parseCSV';
 import LatestRates from './components/LatestRates';
 import YieldCurve from './components/YieldCurve';
-import RateHistory from './components/RateHistory';
 import ChartBuilder from './components/ChartBuilder';
 import MyCharts from './components/MyCharts';
 import MarketPricing from './components/MarketPricing';
@@ -12,7 +11,7 @@ import InvestmentPack from './components/InvestmentPack';
 import DataUploader from './components/DataUploader';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Rate History', 'Chart Builder', 'My Charts', 'Investment Pack'];
+const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -164,7 +163,6 @@ export default function App() {
             {activeTab === 'Latest Rates'    && <LatestRates    data={data} groups={groups} />}
             {activeTab === 'Market Pricing'  && <MarketPricing  data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Yield Curve'     && <YieldCurve     data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
-            {activeTab === 'Rate History'    && <RateHistory    data={data} groups={groups} />}
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
             {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} onReorder={reorderPack} data={data} instruments={instruments} />}
