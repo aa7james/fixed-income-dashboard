@@ -116,7 +116,7 @@ export default function InflationLinkedBonds() {
             fill="rgba(15,40,120,0.85)"
             stroke="none"
             isAnimationActive={false}
-            connectNulls={false}
+            connectNulls={true}
             legendType="none"
           />
 
@@ -128,7 +128,7 @@ export default function InflationLinkedBonds() {
             stroke="#4ade80"
             strokeWidth={2}
             dot={false}
-            connectNulls={false}
+            connectNulls={true}
             isAnimationActive={false}
             legendType="none"
           />
@@ -139,7 +139,7 @@ export default function InflationLinkedBonds() {
             stroke="#2dd4bf"
             strokeWidth={2}
             dot={false}
-            connectNulls={false}
+            connectNulls={true}
             isAnimationActive={false}
             legendType="none"
           />

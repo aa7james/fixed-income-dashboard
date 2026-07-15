@@ -108,7 +108,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
               stroke={color}
               dot={false}
               strokeWidth={1.5}
-              connectNulls={false}
+              connectNulls={true}
               unit={` ${unit}`}
             >
               <LabelList

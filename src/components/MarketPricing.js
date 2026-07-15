@@ -135,7 +135,7 @@ function FraCurveChart({ title, data, packKey, isInPack, onTogglePack }) {
             stroke="#38bdf8"
             strokeWidth={2}
             dot={{ r: 4, fill: '#38bdf8' }}
-            connectNulls={false}
+            connectNulls={true}
           >
             <LabelList dataKey="rate" position="top" style={{ fill: '#38bdf8', fontSize: 10 }} formatter={v => `${v}%`} />
           </Line>

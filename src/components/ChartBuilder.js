@@ -253,7 +253,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                         stroke={s.color}
                         dot={false}
                         strokeWidth={2}
-                        connectNulls={false}
+                        connectNulls={true}
                         unit={` ${unit}`}
                       >
                         <LabelList

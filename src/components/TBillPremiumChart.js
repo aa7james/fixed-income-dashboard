@@ -101,7 +101,7 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
               strokeWidth={c.key === 'current' ? 2.5 : 1.5}
               strokeDasharray={c.dash}
               dot={{ r: 3, fill: c.color }}
-              connectNulls={false}
+              connectNulls={true}
             />
           ))}
         </LineChart>
