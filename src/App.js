@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { parseBloombergCSV } from './utils/parseCSV';
 import { loadFromSupabase, loadInstruments, loadLastUpdated } from './utils/supabase';
 import { categoriseFromInstruments, categoriseColumns } from './utils/parseCSV';
 import LatestRates from './components/LatestRates';
@@ -8,7 +7,6 @@ import ChartBuilder from './components/ChartBuilder';
 import MyCharts from './components/MyCharts';
 import MarketPricing from './components/MarketPricing';
 import InvestmentPack from './components/InvestmentPack';
-import DataUploader from './components/DataUploader';
 import RefreshDataButton from './components/RefreshDataButton';
 import styles from './App.module.css';
 
@@ -81,14 +79,6 @@ export default function App() {
     setError(null);
   }, []);
 
-  const handleCSV = useCallback((text) => {
-    try {
-      applyData(parseBloombergCSV(text), instruments);
-    } catch (e) {
-      setError('Could not parse the CSV file. Please check the format.');
-    }
-  }, [applyData, instruments]);
-
   const refreshFromSupabase = useCallback(() => {
     return Promise.all([loadFromSupabase(), loadInstruments(), loadLastUpdated()])
       .then(([parsed, instrumentList, lastUpdatedAt]) => {
@@ -97,7 +87,7 @@ export default function App() {
         if (parsed.dataRows.length > 0) {
           applyData(parsed, instrumentList);
         } else {
-          setError('Database is empty — use "Load CSV" to import data.');
+          setError('Database is empty — click "Refresh Data" to pull the latest from Bloomberg.');
         }
       })
       .catch(err => {
@@ -131,7 +121,6 @@ export default function App() {
             </span>
           )}
           <RefreshDataButton onUpdated={refreshFromSupabase} />
-          <DataUploader onData={handleCSV} hasData={!!data} />
         </div>
       </header>
 
@@ -144,7 +133,7 @@ export default function App() {
 
       {!loading && !data && !error && (
         <div className={styles.center}>
-          <p className={styles.placeholder}>No data found. Use "Load CSV" to import your data.</p>
+          <p className={styles.placeholder}>No data found. Click "Refresh Data" to pull the latest from Bloomberg.</p>
         </div>
       )}
 
