@@ -98,7 +98,10 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
         <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
         {chart.series.map((s, i) => {
           const color = s.color || SERIES_COLORS[i % SERIES_COLORS.length];
-          const unit = s.type === 'spread' ? 'bps' : '%';
+          // Variable Rate NCD instruments are spreads quoted in basis points,
+          // not yields in %, even when plotted as plain instrument lines.
+          const isNcdBps = /variable rate ncd/i.test(s.instrument || '') || /variable rate ncd/i.test(s.label || '');
+          const unit = (s.type === 'spread' || isNcdBps) ? 'bps' : '%';
           return (
             <Line
               key={s.key}
