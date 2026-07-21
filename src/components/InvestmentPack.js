@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import YieldCurve from './YieldCurve';
@@ -9,7 +9,22 @@ import TBillPremiumChart from './TBillPremiumChart';
 import styles from './InvestmentPack.module.css';
 
 
-function PackSection({ itemKey, onRemove, onDragStart, onDragOver, onDrop, isDragOver, children }) {
+function NoteEditor({ note, onSave }) {
+  const [value, setValue] = useState(note || '');
+  useEffect(() => { setValue(note || ''); }, [note]);
+  return (
+    <textarea
+      className={styles.note}
+      placeholder="Add explanatory notes for the investment team…"
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={() => { if (value !== (note || '')) onSave(value); }}
+      rows={2}
+    />
+  );
+}
+
+function PackSection({ itemKey, note, onRemove, onUpdateNote, onDragStart, onDragOver, onDrop, isDragOver, children }) {
   return (
     <div
       className={`${styles.chartSection} ${isDragOver ? styles.dragOver : ''}`}
@@ -24,12 +39,13 @@ function PackSection({ itemKey, onRemove, onDragStart, onDragOver, onDrop, isDra
       </div>
       <div className={styles.pdfCapture} data-pdf-section>
         {children}
+        {onUpdateNote && <NoteEditor note={note} onSave={(v) => onUpdateNote(itemKey, v)} />}
       </div>
     </div>
   );
 }
 
-export default function InvestmentPack({ packItems, onTogglePack, onReorder, data, instruments }) {
+export default function InvestmentPack({ packItems, onTogglePack, onReorder, onUpdateNote, data, instruments }) {
   const dragKey = useRef(null);
   const [dragOverKey, setDragOverKey] = useState(null);
 
@@ -41,9 +57,11 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
     setDragOverKey(null);
   };
 
-  const sectionProps = (key) => ({
+  const sectionProps = (key, cfg = {}) => ({
     itemKey: key,
+    note: cfg.note,
     onRemove: onTogglePack,
+    onUpdateNote,
     onDragStart: handleDragStart,
     onDragOver: handleDragOver,
     onDrop: handleDrop,
@@ -140,25 +158,25 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
           const cfg = item.config;
 
           if (key.startsWith('yield-curve')) return (
-            <PackSection key={key} {...sectionProps(key)}>
+            <PackSection key={key} {...sectionProps(key, cfg)}>
               <YieldCurve data={data} instruments={instruments} packMode packConfig={cfg} />
             </PackSection>
           );
 
           if (key === 'inflation-linked') return (
-            <PackSection key={key} {...sectionProps(key)}>
+            <PackSection key={key} {...sectionProps(key, cfg)}>
               <InflationLinkedBonds />
             </PackSection>
           );
 
           if (key === 'tbill-premium') return (
-            <PackSection key={key} {...sectionProps(key)}>
+            <PackSection key={key} {...sectionProps(key, cfg)}>
               <TBillPremiumChart data={data} />
             </PackSection>
           );
 
           if (key === 'jibar-fra' || key === 'zaronia-fra' || key === 'sofr-fra') return (
-            <PackSection key={key} {...sectionProps(key)}>
+            <PackSection key={key} {...sectionProps(key, cfg)}>
               <MarketPricing data={data} instruments={instruments} packMode packKeys={[key]} />
             </PackSection>
           );
@@ -166,7 +184,7 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, dat
           if (key.startsWith('my-chart-')) {
             const chart = { id: cfg.chartId, name: cfg.chartName, series: cfg.series };
             return (
-              <PackSection key={key} {...sectionProps(key)}>
+              <PackSection key={key} {...sectionProps(key, cfg)}>
                 <h3 className={styles.sectionTitle}>{cfg.chartName}</h3>
                 <ChartInner chart={chart} data={data} period={cfg.period} customFrom={cfg.customFrom} customTo={cfg.customTo} height={450} />
               </PackSection>

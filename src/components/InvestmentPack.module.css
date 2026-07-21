@@ -80,6 +80,26 @@
   background: #1e293b;
 }
 
+.note {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-left: 3px solid #60a5fa;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.note::placeholder { color: #475569; }
+.note:focus { outline: none; border-color: #60a5fa; }
+
 .dragOver {
   border-color: #60a5fa !important;
   box-shadow: 0 0 0 2px rgba(96,165,250,0.3);

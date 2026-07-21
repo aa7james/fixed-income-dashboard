@@ -130,7 +130,7 @@ const CustomTooltip = ({ active, payload }) => {
     <div className={styles.tooltip}>
       <p className={styles.tooltipLabel}>{d.label}</p>
       <p className={styles.tooltipTenor}>{d.x < 1 ? `${Math.round(d.x * 12)}m` : `${d.x.toFixed(1)}y`}</p>
-      <p className={styles.tooltipYield}>{d.y.toFixed(3)}%</p>
+      <p className={styles.tooltipYield}>{d.y.toFixed(2)}%</p>
     </div>
   );
 };
