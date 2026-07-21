@@ -30,7 +30,7 @@ function buildFraCurveData(fraInstruments, baseInstrument, latestRow) {
     points.push({
       label: baseInstrument.display_label || baseInstrument.name,
       month: 0,
-      rate: +baseVal.toFixed(4),
+      rate: +baseVal.toFixed(2),
       cumulative: null,
     });
   }
@@ -38,11 +38,11 @@ function buildFraCurveData(fraInstruments, baseInstrument, latestRow) {
   sorted.forEach(inst => {
     const rate = latestRow[inst.name] ?? null;
     // Cumulative = total increase from base rate
-    const cumulative = rate != null && baseVal != null ? +((rate - baseVal).toFixed(4)) : null;
+    const cumulative = rate != null && baseVal != null ? +((rate - baseVal).toFixed(2)) : null;
     points.push({
       label: inst.display_label || inst.name,
       month: tenorEndMonth(inst.name),
-      rate: rate != null ? +rate.toFixed(4) : null,
+      rate: rate != null ? +rate.toFixed(2) : null,
       cumulative,
     });
   });

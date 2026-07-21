@@ -15,19 +15,19 @@ const CustomTooltip = ({ active, payload }) => {
       <p className={styles.tooltipDate}>{d.maturity_date} ({d.years_to_maturity}y)</p>
       {d.nominal_yield != null && (
         <p style={{ color: '#4ade80', margin: '2px 0', fontSize: 13 }}>
-          Nominal: <strong>{Number(d.nominal_yield).toFixed(4)}%</strong>
+          Nominal: <strong>{Number(d.nominal_yield).toFixed(2)}%</strong>
           {d.nominal_bond ? ` (${d.nominal_bond})` : ''}
         </p>
       )}
       {d.real_yield != null && (
         <p style={{ color: '#2dd4bf', margin: '2px 0', fontSize: 13 }}>
-          Real: <strong>{Number(d.real_yield).toFixed(4)}%</strong>
+          Real: <strong>{Number(d.real_yield).toFixed(2)}%</strong>
           {d.real_bond ? ` (${d.real_bond})` : ''}
         </p>
       )}
       {d.implied_inflation != null && (
         <p style={{ color: '#94a3b8', margin: '2px 0', fontSize: 13 }}>
-          Implied Inflation: <strong>{Number(d.implied_inflation).toFixed(4)}%</strong>
+          Implied Inflation: <strong>{Number(d.implied_inflation).toFixed(2)}%</strong>
         </p>
       )}
     </div>

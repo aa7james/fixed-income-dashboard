@@ -37,7 +37,7 @@ function buildChartData(dataRows, series, period, customFrom, customTo) {
         point[s.key] = (a != null && b != null) ? +((a - b) * 100).toFixed(2) : null;
       } else {
         const v = row[s.instrument];
-        point[s.key] = v != null ? +v.toFixed(4) : null;
+        point[s.key] = v != null ? +v.toFixed(2) : null;
       }
     });
     return point;
