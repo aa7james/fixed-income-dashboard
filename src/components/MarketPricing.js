@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import AddToPackButton from './AddToPackButton';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
@@ -14,6 +14,27 @@ function tenorEndMonth(name) {
 function tenorStartMonth(name) {
   const m = name.match(/(\d+)[Xx×](\d+)/);
   return m ? parseInt(m[1], 10) : 999;
+}
+
+// Relative comparison presets
+const COMPARISON_PRESETS = [
+  { label: '1W ago',  days: 7   },
+  { label: '1M ago',  days: 30  },
+  { label: '3M ago',  days: 91  },
+  { label: '6M ago',  days: 182 },
+  { label: '1Y ago',  days: 365 },
+];
+
+// Find the nearest available row to a target date
+function nearestRow(dataRows, targetDate) {
+  if (!dataRows.length) return null;
+  const target = targetDate.getTime();
+  let best = null, bestDiff = Infinity;
+  for (const row of dataRows) {
+    const diff = Math.abs(row.date.getTime() - target);
+    if (diff < bestDiff) { bestDiff = diff; best = row; }
+  }
+  return best;
 }
 
 function buildFraCurveData(fraInstruments, baseInstrument, latestRow) {
@@ -64,7 +85,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function FraCurveChart({ title, data, packKey, isInPack, onTogglePack }) {
+function FraCurveChart({ title, subtitle, data, packKey, isInPack, onTogglePack }) {
   if (!data.length) return null;
 
   const barData = data.slice(1); // exclude base from bar chart
@@ -72,7 +93,10 @@ function FraCurveChart({ title, data, packKey, isInPack, onTogglePack }) {
   return (
     <div className={styles.chartCard}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h3 className={styles.chartTitle} style={{ margin: 0 }}>{title}</h3>
+        <div>
+          <h3 className={styles.chartTitle} style={{ margin: 0 }}>{title}</h3>
+          {subtitle && <span style={{ fontSize: 12, color: '#64748b' }}>{subtitle}</span>}
+        </div>
         {onTogglePack && (
           <AddToPackButton isInPack={isInPack} onToggle={() => onTogglePack(packKey)} />
         )}
@@ -179,6 +203,9 @@ function FraCurveChart({ title, data, packKey, isInPack, onTogglePack }) {
 }
 
 export default function MarketPricing({ data, instruments, onTogglePack, isInPack, packMode = false, packKeys = [] }) {
+  const [selectedPreset, setSelectedPreset] = useState(null);
+  const [customDate, setCustomDate] = useState('');
+
   const latestRow = useMemo(() => {
     if (!data?.dataRows?.length) return null;
     return data.dataRows[data.dataRows.length - 1];
@@ -207,6 +234,39 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
   const zaroniaData = useMemo(() => buildFraCurveData(zaroniaFras, zaroniaBase, latestRow), [zaroniaFras, zaroniaBase, latestRow]);
   const sofrData    = useMemo(() => buildFraCurveData(sofrFras,    sofrBase,    latestRow), [sofrFras,    sofrBase,    latestRow]);
 
+  // Resolve the selected comparison date to an actual data row
+  const comparisonRow = useMemo(() => {
+    if (!data?.dataRows?.length || !latestRow) return null;
+    let target = null;
+    if (customDate) {
+      const [y, m, d] = customDate.split('-').map(Number);
+      if (y && m && d) target = new Date(y, m - 1, d);
+    } else if (selectedPreset) {
+      const preset = COMPARISON_PRESETS.find(p => p.label === selectedPreset);
+      if (preset) target = new Date(latestRow.date.getTime() - preset.days * 24 * 3600 * 1000);
+    }
+    if (!target) return null;
+    return nearestRow(data.dataRows, target);
+  }, [data, latestRow, customDate, selectedPreset]);
+
+  const comparisonDateStr = comparisonRow?.dateStr || '';
+
+  const zaroniaCompData = useMemo(() => buildFraCurveData(zaroniaFras, zaroniaBase, comparisonRow), [zaroniaFras, zaroniaBase, comparisonRow]);
+  const sofrCompData    = useMemo(() => buildFraCurveData(sofrFras,    sofrBase,    comparisonRow), [sofrFras,    sofrBase,    comparisonRow]);
+
+  const selectPreset = (label) => {
+    setSelectedPreset(prev => prev === label ? null : label);
+    setCustomDate('');
+  };
+  const selectCustom = (v) => {
+    setCustomDate(v);
+    setSelectedPreset(null);
+  };
+  const clearComparison = () => {
+    setSelectedPreset(null);
+    setCustomDate('');
+  };
+
   return (
     <div className={styles.wrap}>
       <div className={styles.heading}>
@@ -234,6 +294,74 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
           />
         )}
       </div>
+
+      {/* Historical comparison — only in the interactive (non-pack) view */}
+      {!packMode && (
+        <>
+          <div style={{ marginTop: 32, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginRight: 4 }}>Compare against date:</span>
+            {COMPARISON_PRESETS.map(preset => {
+              const on = selectedPreset === preset.label;
+              return (
+                <button
+                  key={preset.label}
+                  onClick={() => selectPreset(preset.label)}
+                  style={{
+                    fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 12, cursor: 'pointer',
+                    border: `1px solid ${on ? '#60a5fa' : '#334155'}`,
+                    background: on ? 'rgba(96,165,250,0.15)' : 'transparent',
+                    color: on ? '#60a5fa' : '#64748b',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+            <span style={{ fontSize: 11, color: '#475569', margin: '0 4px' }}>or</span>
+            <input
+              type="date"
+              value={customDate}
+              onChange={e => selectCustom(e.target.value)}
+              style={{
+                fontSize: 12, padding: '4px 8px', borderRadius: 8,
+                border: `1px solid ${customDate ? '#60a5fa' : '#334155'}`,
+                background: '#0f172a', color: '#e2e8f0',
+              }}
+            />
+            {(selectedPreset || customDate) && (
+              <button
+                onClick={clearComparison}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 12, cursor: 'pointer',
+                  border: '1px solid #334155', background: 'transparent', color: '#f87171',
+                }}
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
+
+          {comparisonRow && (
+            <div className={styles.grid}>
+              {zaroniaCompData.length > 0 && (
+                <FraCurveChart
+                  title="Zaronia FRA Curve"
+                  subtitle={`as at ${comparisonDateStr}`}
+                  data={zaroniaCompData}
+                />
+              )}
+              {sofrCompData.length > 0 && (
+                <FraCurveChart
+                  title="SOFR FRA Curve"
+                  subtitle={`as at ${comparisonDateStr}`}
+                  data={sofrCompData}
+                />
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
