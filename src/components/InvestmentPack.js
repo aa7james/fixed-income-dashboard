@@ -6,6 +6,7 @@ import InflationLinkedBonds from './InflationLinkedBonds';
 import MarketPricing from './MarketPricing';
 import { ChartInner } from './MyCharts';
 import TBillPremiumChart from './TBillPremiumChart';
+import RiskPremiumChart from './RiskPremiumChart';
 import styles from './InvestmentPack.module.css';
 
 
@@ -172,6 +173,12 @@ export default function InvestmentPack({ packItems, onTogglePack, onReorder, onU
           if (key === 'tbill-premium') return (
             <PackSection key={key} {...sectionProps(key, cfg)}>
               <TBillPremiumChart data={data} />
+            </PackSection>
+          );
+
+          if (key === 'risk-premium') return (
+            <PackSection key={key} {...sectionProps(key, cfg)}>
+              <RiskPremiumChart data={data} defaultPeriod="5Y" />
             </PackSection>
           );
 
