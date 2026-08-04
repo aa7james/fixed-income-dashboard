@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import AddToPackButton from './AddToPackButton';
@@ -91,7 +91,10 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
           )}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={340}>
+      <p style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 4px' }}>
+        Stacked — total premium
+      </p>
+      <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }} barCategoryGap={0}>
           <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
           <XAxis
@@ -115,6 +118,35 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
           <Bar dataKey="credit"   name="Credit risk"   stackId="a" fill={CREDIT_COLOR} />
           <Bar dataKey="currency" name="Currency risk" stackId="a" fill={CURRENCY_COLOR} />
         </BarChart>
+      </ResponsiveContainer>
+
+      <p style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: '16px 0 4px' }}>
+        Lines — each component
+      </p>
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
+          <XAxis
+            dataKey="dateStr"
+            tick={{ fill: '#94a3b8', fontSize: 9 }}
+            interval="preserveStartEnd"
+            minTickGap={40}
+            tickFormatter={d => {
+              const parts = d.split('/');
+              return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
+            }}
+          />
+          <YAxis
+            tickFormatter={v => `${v}`}
+            tick={{ fill: '#94a3b8', fontSize: 11 }}
+            width={48}
+            unit=" bps"
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }} />
+          <Line type="monotone" dataKey="currency" name="Currency risk" stroke={CURRENCY_COLOR} strokeWidth={1.5} dot={false} connectNulls={true} />
+          <Line type="monotone" dataKey="credit"   name="Credit risk"   stroke={CREDIT_COLOR}   strokeWidth={1.5} dot={false} connectNulls={true} />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );
