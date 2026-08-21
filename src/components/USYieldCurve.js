@@ -83,6 +83,10 @@ function DotWithLabel(props) {
   );
 }
 
+function fmtDate(s) {
+  return new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 function buildCurve(row) {
   const pts = [];
   for (const [name, tenor] of Object.entries(US_TENORS)) {
@@ -98,8 +102,6 @@ export default function USYieldCurve({ data }) {
   const [selectedPresets, setSelectedPresets] = useState([]);
   const dataRows = data?.dataRows || [];
   const latest = dataRows.length ? dataRows[dataRows.length - 1] : null;
-
-  const fmtDate = (s) => new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const comparisonRows = useMemo(() => {
     if (!latest) return [];
