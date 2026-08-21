@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts';
 import styles from './YieldCurve.module.css';
 
@@ -48,6 +49,21 @@ const CustomTooltip = ({ active, payload }) => {
     <div className={styles.tooltip}>
       <p className={styles.tooltipLabel}>{d.tenorLabel}</p>
       <p className={styles.tooltipYield}>{d.y.toFixed(2)}%</p>
+    </div>
+  );
+};
+
+const SpreadTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0];
+  const bps = d?.value;
+  if (bps == null) return null;
+  return (
+    <div className={styles.tooltip}>
+      <p className={styles.tooltipLabel}>{d.payload.tenorLabel}</p>
+      <p style={{ color: bps >= 0 ? '#f87171' : '#4ade80', fontWeight: 700, margin: 0 }}>
+        {bps >= 0 ? '+' : ''}{bps.toFixed(1)} bps
+      </p>
     </div>
   );
 };
@@ -106,6 +122,21 @@ export default function USYieldCurve({ data }) {
       data: buildCurve(row),
       showLabel: single,
     })).filter(s => s.data.length > 0);
+  }, [latest, comparisonRows]);
+
+  // Spread bar chart: current minus the first selected comparison date
+  const spreadData = useMemo(() => {
+    if (!latest || comparisonRows.length === 0) return [];
+    const curMap = Object.fromEntries(buildCurve(latest).map(p => [p.name, p]));
+    const compMap = Object.fromEntries(buildCurve(comparisonRows[0]).map(p => [p.name, p.y]));
+    const bars = [];
+    for (const p of Object.values(curMap)) {
+      const compY = compMap[p.name];
+      if (compY == null) continue;
+      bars.push({ tenorLabel: p.tenorLabel, x: p.x, bps: +((p.y - compY) * 100).toFixed(1) });
+    }
+    bars.sort((a, b) => a.x - b.x);
+    return bars;
   }, [latest, comparisonRows]);
 
   const allPts = series.flatMap(s => s.data);
@@ -191,6 +222,43 @@ export default function USYieldCurve({ data }) {
           </ScatterChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Spread bar chart — matches the SA yield curve */}
+      {spreadData.length > 0 && (
+        <div className={styles.chartWrap} style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
+            Spread vs {selectedPresets[0]} — change in yield (bps)
+            <span style={{ fontSize: 11, fontWeight: 400, color: '#475569', marginLeft: 8 }}>
+              positive = yields rose · negative = yields fell
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={spreadData} margin={{ top: 8, right: 24, left: 0, bottom: 48 }}>
+              <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
+              <XAxis
+                dataKey="tenorLabel"
+                tick={{ fill: '#94a3b8', fontSize: 10 }}
+                angle={-45}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis
+                tickFormatter={v => `${v > 0 ? '+' : ''}${v}`}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                width={48}
+                unit=" bps"
+              />
+              <Tooltip content={<SpreadTooltip />} />
+              <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
+              <Bar dataKey="bps" radius={[3, 3, 0, 0]}>
+                {spreadData.map((entry, i) => (
+                  <Cell key={i} fill={entry.bps >= 0 ? '#f87171' : '#4ade80'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
