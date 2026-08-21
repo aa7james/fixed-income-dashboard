@@ -25,6 +25,12 @@ const COMPARISON_PRESETS = [
 
 const DATE_COLORS = ['#f1f5f9', '#fbbf24', '#a78bfa', '#34d399', '#f87171'];
 
+const TENOR_RANGES = [
+  { label: 'Short Term',  max: 2,    description: '0 – 2 years' },
+  { label: 'Medium Term', max: 10,   description: '0 – 10 years' },
+  { label: 'Full Curve',  max: null, description: 'All maturities' },
+];
+
 function formatTenor(x) {
   if (x < 1) return `${Math.round(x * 12)}m`;
   return `${x}y`;
@@ -100,8 +106,10 @@ function buildCurve(row) {
 
 export default function USYieldCurve({ data }) {
   const [selectedPresets, setSelectedPresets] = useState([]);
+  const [tenorRange, setTenorRange] = useState('Full Curve');
   const dataRows = useMemo(() => data?.dataRows || [], [data]);
   const latest = dataRows.length ? dataRows[dataRows.length - 1] : null;
+  const activeMax = (TENOR_RANGES.find(r => r.label === tenorRange) || {}).max;
 
   const comparisonRows = useMemo(() => {
     if (!latest) return [];
@@ -141,10 +149,16 @@ export default function USYieldCurve({ data }) {
     return bars;
   }, [latest, comparisonRows]);
 
-  const allPts = series.flatMap(s => s.data);
+  // Apply the tenor-range filter to both curve series and the spread bars
+  const filteredSeries = series
+    .map(s => ({ ...s, data: activeMax ? s.data.filter(p => p.x <= activeMax) : s.data }))
+    .filter(s => s.data.length > 0);
+  const filteredSpread = activeMax ? spreadData.filter(p => p.x <= activeMax) : spreadData;
+
+  const allPts = filteredSeries.flatMap(s => s.data);
   if (!allPts.length) return null;
 
-  const xMax = Math.ceil(Math.max(...allPts.map(p => p.x))) + 1;
+  const xMax = activeMax || Math.ceil(Math.max(...allPts.map(p => p.x))) + 1;
   const yVals = allPts.map(p => p.y);
   const yDomain = [
     Math.max(0, Math.floor(Math.min(...yVals) * 2) / 2 - 0.5),
@@ -159,6 +173,20 @@ export default function USYieldCurve({ data }) {
       <div>
         <h2 className={styles.heading}>US Treasury Yield Curve</h2>
         <p className={styles.sub}>Constant-maturity benchmarks · Tenor vs Yield{latest ? ` · as at ${latest.dateStr}` : ''}</p>
+      </div>
+
+      <div className={styles.categoryBar}>
+        {TENOR_RANGES.map(r => (
+          <button
+            key={r.label}
+            className={`${styles.catBtn} ${tenorRange === r.label ? styles.catBtnOn : ''}`}
+            style={tenorRange === r.label ? { borderColor: '#94a3b8', color: '#e2e8f0', background: '#94a3b822' } : {}}
+            onClick={() => setTenorRange(r.label)}
+            title={r.description}
+          >
+            {r.label}
+          </button>
+        ))}
       </div>
 
       <div className={styles.dateRow}>
@@ -210,7 +238,7 @@ export default function USYieldCurve({ data }) {
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }} />
-            {series.map(s => (
+            {filteredSeries.map(s => (
               <Scatter
                 key={s.key}
                 name={s.label}
@@ -226,7 +254,7 @@ export default function USYieldCurve({ data }) {
       </div>
 
       {/* Spread bar chart — matches the SA yield curve */}
-      {spreadData.length > 0 && (
+      {filteredSpread.length > 0 && (
         <div className={styles.chartWrap} style={{ marginTop: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
             Spread vs {selectedPresets[0]} — change in yield (bps)
@@ -235,7 +263,7 @@ export default function USYieldCurve({ data }) {
             </span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={spreadData} margin={{ top: 8, right: 24, left: 0, bottom: 48 }}>
+            <BarChart data={filteredSpread} margin={{ top: 8, right: 24, left: 0, bottom: 48 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
               <XAxis
                 dataKey="tenorLabel"
@@ -253,7 +281,7 @@ export default function USYieldCurve({ data }) {
               <Tooltip content={<SpreadTooltip />} />
               <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
               <Bar dataKey="bps" radius={[3, 3, 0, 0]}>
-                {spreadData.map((entry, i) => (
+                {filteredSpread.map((entry, i) => (
                   <Cell key={i} fill={entry.bps >= 0 ? '#f87171' : '#4ade80'} />
                 ))}
               </Bar>
