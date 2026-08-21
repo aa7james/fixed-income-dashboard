@@ -100,7 +100,7 @@ function buildCurve(row) {
 
 export default function USYieldCurve({ data }) {
   const [selectedPresets, setSelectedPresets] = useState([]);
-  const dataRows = data?.dataRows || [];
+  const dataRows = useMemo(() => data?.dataRows || [], [data]);
   const latest = dataRows.length ? dataRows[dataRows.length - 1] : null;
 
   const comparisonRows = useMemo(() => {
