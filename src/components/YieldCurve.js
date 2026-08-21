@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import InflationLinkedBonds from './InflationLinkedBonds';
+import USYieldCurve from './USYieldCurve';
 import AddToPackButton from './AddToPackButton';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -501,6 +502,8 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
       {!packMode && (
         <>
+          <USYieldCurve data={data} />
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, marginBottom: 4 }}>
             <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
           </div>
