@@ -503,16 +503,16 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
       {!packMode && (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, marginBottom: 4 }}>
+            <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
+          </div>
+          <InflationLinkedBonds />
+
           <USYieldCurve data={data} />
 
           <div style={{ marginTop: 24 }}>
             <USInflationLinked data={data} />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, marginBottom: 4 }}>
-            <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
-          </div>
-          <InflationLinkedBonds />
         </>
       )}
     </div>
