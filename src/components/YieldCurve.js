@@ -17,8 +17,6 @@ const CURVE_CATEGORIES = {
   'Fixed Rate NCDs':  { color: '#fb923c', defaultOn: false },
   'T-Bills':          { color: '#818cf8', defaultOn: false },
   'SOE / Corporate Bonds': { color: '#f472b6', defaultOn: false },
-  'US Treasuries':    { color: '#fb7185', defaultOn: false },
-  'US T-Bills':       { color: '#c084fc', defaultOn: false },
 };
 
 const SWAP_TENORS = {
@@ -42,20 +40,6 @@ const NCD_TENORS = {
 const TBILL_TENORS = {
   '3m T-Bill': 0.25, '6m T-Bill': 0.5,
   '9m T-Bill': 0.75, '12m T-Bill': 1,
-};
-
-// US Treasury on-the-run benchmarks — plotted at NOMINAL tenor (not stored
-// maturity date) since the generic CT##/CB## tickers roll to the current
-// benchmark and the stored maturity would drift over time.
-const US_TSY_TENORS = {
-  'US 2Y Treasury': 2,   'US 3Y Treasury': 3,   'US 5Y Treasury': 5,
-  'US 7Y Treasury': 7,   'US 10Y Treasury': 10, 'US 20Y Treasury': 20,
-  'US 30Y Treasury': 30,
-};
-
-const US_BILL_TENORS = {
-  'US 1M T-Bill': 1/12, 'US 2M T-Bill': 2/12, 'US 3M T-Bill': 0.25,
-  'US 4M T-Bill': 4/12, 'US 6M T-Bill': 0.5,  'US 1Y T-Bill': 1,
 };
 
 const TENOR_RANGES = [
@@ -124,19 +108,6 @@ function buildPoints(catName, row, refDate, instruments) {
       const y = row[col];
       if (y == null) continue;
       points.push({ x: tenor, y: +y.toFixed(4), label: `${Math.round(tenor * 12)}m`, name: col });
-    }
-  } else if (catName === 'US Treasuries') {
-    for (const [col, tenor] of Object.entries(US_TSY_TENORS)) {
-      const y = row[col];
-      if (y == null) continue;
-      points.push({ x: tenor, y: +y.toFixed(2), label: `${tenor}Y`, name: col });
-    }
-  } else if (catName === 'US T-Bills') {
-    for (const [col, tenor] of Object.entries(US_BILL_TENORS)) {
-      const y = row[col];
-      if (y == null) continue;
-      const months = Math.round(tenor * 12);
-      points.push({ x: tenor, y: +y.toFixed(2), label: months < 12 ? `${months}m` : '1y', name: col });
     }
   } else {
     const catInstruments = instruments.filter(i => i.category === catName && i.maturity_date);
