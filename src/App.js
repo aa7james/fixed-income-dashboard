@@ -8,6 +8,7 @@ import MyCharts from './components/MyCharts';
 import MarketPricing from './components/MarketPricing';
 import InvestmentPack from './components/InvestmentPack';
 import RefreshDataButton from './components/RefreshDataButton';
+import NewsSidebar from './components/NewsSidebar';
 import styles from './App.module.css';
 
 const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack'];
@@ -22,6 +23,7 @@ export default function App() {
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');
   const [chartRefresh, setChartRefresh] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [showNews, setShowNews] = useState(false);
   const [packItems, setPackItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem('investmentPack') || '[]'); } catch { return []; }
   });
@@ -125,9 +127,18 @@ export default function App() {
               })}
             </span>
           )}
+          <button
+            className={styles.newsBtn}
+            onClick={() => setShowNews(v => !v)}
+            title="Macro news"
+          >
+            📰 News
+          </button>
           <RefreshDataButton onUpdated={refreshFromSupabase} />
         </div>
       </header>
+
+      <NewsSidebar open={showNews} onClose={() => setShowNews(false)} />
 
       {loading && (
         <div className={styles.center}>

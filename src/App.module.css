@@ -29,6 +29,21 @@
   gap: 16px;
 }
 
+.newsBtn {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.newsBtn:hover { color: #e2e8f0; border-color: #475569; }
+
 .lastUpdated {
   font-size: 12px;
   color: #64748b;
