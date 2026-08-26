@@ -84,12 +84,17 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
     [allNames, search]
   );
 
+  const nextColor = (prev) => {
+    const used = new Set(prev.map(s => s.color));
+    return SERIES_COLORS.find(c => !used.has(c)) || SERIES_COLORS[prev.length % SERIES_COLORS.length];
+  };
+
   const addSeries = useCallback(() => {
     if (addType === 'raw' && pickA) {
       const key = `raw_${pickA}_${Date.now()}`;
       setSeries(prev => [...prev, {
         key, type: 'raw', instrument: pickA, axis: 'left',
-        label: pickA, color: SERIES_COLORS[prev.length % SERIES_COLORS.length],
+        label: pickA, color: nextColor(prev),
       }]);
       setPickA('');
     } else if (addType === 'spread' && pickA && pickB && pickA !== pickB) {
@@ -98,12 +103,18 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
         key, type: 'spread', instrumentA: pickA, instrumentB: pickB,
         spreadUnit: 'bps', axis: 'left',
         label: `${pickA} – ${pickB} (bps)`,
-        color: SERIES_COLORS[prev.length % SERIES_COLORS.length],
+        color: nextColor(prev),
       }]);
       setPickA('');
       setPickB('');
     }
   }, [addType, pickA, pickB]);
+
+  const cycleColor = (key) => setSeries(prev => prev.map(s => {
+    if (s.key !== key) return s;
+    const idx = SERIES_COLORS.indexOf(s.color);
+    return { ...s, color: SERIES_COLORS[(idx + 1) % SERIES_COLORS.length] };
+  }));
 
   const removeSeries = (key) => setSeries(prev => prev.filter(s => s.key !== key));
 
@@ -203,7 +214,12 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
               <div className={styles.seriesList}>
                 {series.map(s => (
                   <div key={s.key} className={styles.seriesItem}>
-                    <span className={styles.seriesDot} style={{ background: s.color }} />
+                    <span
+                      className={styles.seriesDot}
+                      style={{ background: s.color, cursor: 'pointer' }}
+                      title="Click to change colour"
+                      onClick={() => cycleColor(s.key)}
+                    />
                     <span className={styles.seriesLabel}>{s.label}</span>
                     {s.type === 'spread' && (
                       <span style={{ display: 'inline-flex', gap: 2, marginRight: 6 }}>
