@@ -9,9 +9,10 @@ import MarketPricing from './components/MarketPricing';
 import InvestmentPack from './components/InvestmentPack';
 import RefreshDataButton from './components/RefreshDataButton';
 import NewsSidebar from './components/NewsSidebar';
+import InstrumentsAdmin from './components/InstrumentsAdmin';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack'];
+const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack', 'Instruments'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -176,6 +177,7 @@ export default function App() {
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
             {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} onReorder={reorderPack} onUpdateNote={updatePackNote} data={data} instruments={instruments} />}
+            {activeTab === 'Instruments'     && <InstrumentsAdmin />}
           </main>
         </>
       )}
