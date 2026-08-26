@@ -91,11 +91,22 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
           }}
         />
         <YAxis
+          yAxisId="left"
           tick={{ fill: '#64748b', fontSize: 10 }}
           width={52}
           domain={['auto', 'auto']}
           tickFormatter={v => v}
         />
+        {chart.series.some(s => s.axis === 'right') && (
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fill: '#64748b', fontSize: 10 }}
+            width={52}
+            domain={['auto', 'auto']}
+            tickFormatter={v => v}
+          />
+        )}
         <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
         {chart.series.map((s, i) => {
@@ -109,6 +120,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
           return (
             <Line
               key={s.key}
+              yAxisId={s.axis === 'right' ? 'right' : 'left'}
               type="monotone"
               dataKey={s.key}
               name={s.label}

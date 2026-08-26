@@ -88,7 +88,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
     if (addType === 'raw' && pickA) {
       const key = `raw_${pickA}_${Date.now()}`;
       setSeries(prev => [...prev, {
-        key, type: 'raw', instrument: pickA,
+        key, type: 'raw', instrument: pickA, axis: 'left',
         label: pickA, color: SERIES_COLORS[prev.length % SERIES_COLORS.length],
       }]);
       setPickA('');
@@ -96,7 +96,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
       const key = `spread_${pickA}_${pickB}_${Date.now()}`;
       setSeries(prev => [...prev, {
         key, type: 'spread', instrumentA: pickA, instrumentB: pickB,
-        spreadUnit: 'bps',
+        spreadUnit: 'bps', axis: 'left',
         label: `${pickA} – ${pickB} (bps)`,
         color: SERIES_COLORS[prev.length % SERIES_COLORS.length],
       }]);
@@ -112,6 +112,10 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
     const base = s.label.replace(/\s*\((bps|%)\)\s*$/, '');
     return { ...s, spreadUnit: unit, label: `${base} (${unit === 'pct' ? '%' : 'bps'})` };
   }));
+
+  const setSeriesAxis = (key, axis) => setSeries(prev => prev.map(s =>
+    s.key === key ? { ...s, axis } : s
+  ));
 
   const chartData = useMemo(() =>
     buildChartData(data.dataRows, series, period, customFrom, customTo),
@@ -220,6 +224,23 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                         ))}
                       </span>
                     )}
+                    <span style={{ display: 'inline-flex', gap: 2, marginRight: 6 }} title="Which Y-axis">
+                      {['left', 'right'].map(ax => (
+                        <button
+                          key={ax}
+                          onClick={() => setSeriesAxis(s.key, ax)}
+                          title={ax === 'left' ? 'Left axis' : 'Right axis'}
+                          style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, cursor: 'pointer',
+                            border: `1px solid ${(s.axis || 'left') === ax ? '#a78bfa' : '#334155'}`,
+                            background: (s.axis || 'left') === ax ? 'rgba(167,139,250,0.15)' : 'transparent',
+                            color: (s.axis || 'left') === ax ? '#a78bfa' : '#64748b',
+                          }}
+                        >
+                          {ax === 'left' ? 'L' : 'R'}
+                        </button>
+                      ))}
+                    </span>
                     <button className={styles.removeBtn} onClick={() => removeSeries(s.key)}>×</button>
                   </div>
                 ))}
@@ -264,11 +285,22 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                     }}
                   />
                   <YAxis
+                    yAxisId="left"
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     tickFormatter={v => `${v}`}
                     domain={['auto', 'auto']}
                     width={52}
                   />
+                  {series.some(s => s.axis === 'right') && (
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fill: '#94a3b8', fontSize: 11 }}
+                      tickFormatter={v => `${v}`}
+                      domain={['auto', 'auto']}
+                      width={52}
+                    />
+                  )}
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
                   {series.map(s => {
@@ -276,6 +308,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                     return (
                       <Line
                         key={s.key}
+                        yAxisId={s.axis === 'right' ? 'right' : 'left'}
                         type="monotone"
                         dataKey={s.key}
                         name={s.label}
