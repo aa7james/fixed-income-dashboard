@@ -32,10 +32,13 @@ function buildChartData(dataRows, series, period, customFrom, customTo) {
       if (s.type === 'spread') {
         const a = row[s.instrumentA];
         const b = row[s.instrumentB];
-        point[s.key] = (a != null && b != null) ? +((a - b) * 100).toFixed(2) : null;
+        const factor = s.spreadUnit === 'pct' ? 1 : 100; // bps default
+        point[s.key] = (a != null && b != null)
+          ? +((a - b) * factor).toFixed(s.spreadUnit === 'pct' ? 2 : 1)
+          : null;
       } else {
         const v = row[s.instrument];
-        point[s.key] = v != null ? +v.toFixed(4) : null;
+        point[s.key] = v != null ? +v.toFixed(2) : null;
       }
     });
     return point;
@@ -93,6 +96,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
       const key = `spread_${pickA}_${pickB}_${Date.now()}`;
       setSeries(prev => [...prev, {
         key, type: 'spread', instrumentA: pickA, instrumentB: pickB,
+        spreadUnit: 'bps',
         label: `${pickA} – ${pickB} (bps)`,
         color: SERIES_COLORS[prev.length % SERIES_COLORS.length],
       }]);
@@ -102,6 +106,12 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
   }, [addType, pickA, pickB]);
 
   const removeSeries = (key) => setSeries(prev => prev.filter(s => s.key !== key));
+
+  const setSeriesUnit = (key, unit) => setSeries(prev => prev.map(s => {
+    if (s.key !== key || s.type !== 'spread') return s;
+    const base = s.label.replace(/\s*\((bps|%)\)\s*$/, '');
+    return { ...s, spreadUnit: unit, label: `${base} (${unit === 'pct' ? '%' : 'bps'})` };
+  }));
 
   const chartData = useMemo(() =>
     buildChartData(data.dataRows, series, period, customFrom, customTo),
@@ -191,6 +201,25 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                   <div key={s.key} className={styles.seriesItem}>
                     <span className={styles.seriesDot} style={{ background: s.color }} />
                     <span className={styles.seriesLabel}>{s.label}</span>
+                    {s.type === 'spread' && (
+                      <span style={{ display: 'inline-flex', gap: 2, marginRight: 6 }}>
+                        {['bps', 'pct'].map(u => (
+                          <button
+                            key={u}
+                            onClick={() => setSeriesUnit(s.key, u)}
+                            title={u === 'bps' ? 'Basis points' : 'Percent'}
+                            style={{
+                              fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, cursor: 'pointer',
+                              border: `1px solid ${(s.spreadUnit || 'bps') === u ? '#38bdf8' : '#334155'}`,
+                              background: (s.spreadUnit || 'bps') === u ? 'rgba(56,189,248,0.15)' : 'transparent',
+                              color: (s.spreadUnit || 'bps') === u ? '#38bdf8' : '#64748b',
+                            }}
+                          >
+                            {u === 'bps' ? 'bps' : '%'}
+                          </button>
+                        ))}
+                      </span>
+                    )}
                     <button className={styles.removeBtn} onClick={() => removeSeries(s.key)}>×</button>
                   </div>
                 ))}
@@ -243,7 +272,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
                   {series.map(s => {
-                    const unit = s.type === 'spread' ? 'bps' : '%';
+                    const unit = s.type === 'spread' ? (s.spreadUnit === 'pct' ? '%' : 'bps') : '%';
                     return (
                       <Line
                         key={s.key}

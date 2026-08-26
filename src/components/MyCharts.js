@@ -35,7 +35,8 @@ function buildChartData(dataRows, series, period, customFrom, customTo) {
       if (s.type === 'spread') {
         const a = row[s.instrumentA];
         const b = row[s.instrumentB];
-        point[s.key] = (a != null && b != null) ? +((a - b) * 100).toFixed(2) : null;
+        const factor = s.spreadUnit === 'pct' ? 1 : 100; // bps default
+        point[s.key] = (a != null && b != null) ? +((a - b) * factor).toFixed(s.spreadUnit === 'pct' ? 2 : 1) : null;
       } else {
         const v = row[s.instrument];
         point[s.key] = v != null ? +v.toFixed(2) : null;
@@ -102,7 +103,9 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
           // Variable Rate NCD instruments are spreads quoted in basis points,
           // not yields in %, even when plotted as plain instrument lines.
           const isNcdBps = /variable rate ncd/i.test(s.instrument || '') || /variable rate ncd/i.test(s.label || '');
-          const unit = (s.type === 'spread' || isNcdBps) ? 'bps' : '%';
+          const unit = s.type === 'spread'
+            ? (s.spreadUnit === 'pct' ? '%' : 'bps')
+            : (isNcdBps ? 'bps' : '%');
           return (
             <Line
               key={s.key}
