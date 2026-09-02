@@ -71,11 +71,12 @@ function EndLabel({ viewBox, value, color, unit, index, total }) {
   );
 }
 
-export function ChartInner({ chart, data, period, customFrom, customTo, height }) {
+export function ChartInner({ chart, data, period, customFrom, customTo, height, hiddenKeys }) {
   const chartData = useMemo(() =>
     buildChartData(data.dataRows, chart.series, period, customFrom, customTo),
     [data.dataRows, chart.series, period, customFrom, customTo]
   );
+  const isHidden = (key) => hiddenKeys && hiddenKeys.has(key);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -97,7 +98,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
           domain={['auto', 'auto']}
           tickFormatter={v => v}
         />
-        {chart.series.some(s => s.axis === 'right') && (
+        {chart.series.some(s => s.axis === 'right' && !isHidden(s.key)) && (
           <YAxis
             yAxisId="right"
             orientation="right"
@@ -110,6 +111,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height }
         <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
         {chart.series.map((s, i) => {
+          if (isHidden(s.key)) return null;
           const color = s.color || SERIES_COLORS[i % SERIES_COLORS.length];
           // Variable Rate NCD instruments are spreads quoted in basis points,
           // not yields in %, even when plotted as plain instrument lines.
@@ -180,7 +182,14 @@ function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, o
   const [customFrom, setCustomFrom] = useState(layout?.customFrom || '');
   const [customTo, setCustomTo] = useState(layout?.customTo || '');
   const [deleting, setDeleting] = useState(false);
+  const [hidden, setHidden] = useState(() => new Set());
   const isWide = layout?.wide || false;
+
+  const toggleSeries = (key) => setHidden(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   const handlePeriodChange = (p) => { setPeriod(p); onPeriodChange(chart.id, { period: p, customFrom, customTo }); };
   const handleFromChange = (v) => { setCustomFrom(v); onPeriodChange(chart.id, { period, customFrom: v, customTo }); };
@@ -224,7 +233,31 @@ function SavedChart({ chart, data, layout, onDelete, onToggleWide, onMaximize, o
           <button className={styles.deleteBtn} onClick={handleDelete} disabled={deleting}>{deleting ? '…' : '🗑'}</button>
         </div>
       </div>
-      <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={isWide ? 520 : 420} />
+      {chart.series.length > 1 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 4px 10px' }}>
+          {chart.series.map((s, i) => {
+            const color = s.color || SERIES_COLORS[i % SERIES_COLORS.length];
+            const off = hidden.has(s.key);
+            return (
+              <button
+                key={s.key}
+                onClick={() => toggleSeries(s.key)}
+                title={off ? 'Show' : 'Hide'}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
+                  border: `1px solid ${off ? '#334155' : color}`,
+                  background: off ? 'transparent' : color + '22',
+                  color: off ? '#64748b' : color,
+                  textDecoration: off ? 'line-through' : 'none',
+                }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <ChartInner chart={chart} data={data} period={period} customFrom={customFrom} customTo={customTo} height={isWide ? 520 : 420} hiddenKeys={hidden} />
     </div>
   );
 }

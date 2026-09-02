@@ -4,6 +4,13 @@
   flex-direction: column;
 }
 
+.stickyTop {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: #0f172a;
+}
+
 .header {
   background: #1e293b;
   border-bottom: 1px solid #334155;
@@ -12,9 +19,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
 }
 
 .headerLeft {

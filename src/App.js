@@ -110,7 +110,8 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <header className={styles.header} id="app-header">
+      <div className={styles.stickyTop}>
+        <header className={styles.header} id="app-header">
         <div className={styles.headerLeft}>
           <span className={styles.logo}>📈</span>
           <div>
@@ -137,7 +138,22 @@ export default function App() {
           </button>
           <RefreshDataButton onUpdated={refreshFromSupabase} />
         </div>
-      </header>
+        </header>
+
+        {data && (
+          <nav className={styles.tabs} id="app-tabs">
+            {TABS.map(tab => (
+              <button
+                key={tab}
+                className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
+        )}
+      </div>
 
       <NewsSidebar open={showNews} onClose={() => setShowNews(false)} />
 
@@ -158,18 +174,6 @@ export default function App() {
 
       {data && (
         <>
-          <nav className={styles.tabs} id="app-tabs">
-            {TABS.map(tab => (
-              <button
-                key={tab}
-                className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-
           <main className={styles.main}>
             {activeTab === 'Latest Rates'    && <LatestRates    data={data} groups={groups} />}
             {activeTab === 'Market Pricing'  && <MarketPricing  data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
