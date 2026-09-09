@@ -116,9 +116,10 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
           // Variable Rate NCD instruments are spreads quoted in basis points,
           // not yields in %, even when plotted as plain instrument lines.
           const isNcdBps = /variable rate ncd/i.test(s.instrument || '') || /variable rate ncd/i.test(s.label || '');
+          const isMultiple = /p\s*\/\s*e/i.test(s.instrument || s.label || '');
           const unit = s.type === 'spread'
             ? (s.spreadUnit === 'pct' ? '%' : 'bps')
-            : (isNcdBps ? 'bps' : '%');
+            : (isMultiple ? 'x' : (isNcdBps ? 'bps' : '%'));
           return (
             <Line
               key={s.key}

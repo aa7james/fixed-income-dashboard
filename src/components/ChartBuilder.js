@@ -320,7 +320,8 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
                   {series.map(s => {
-                    const unit = s.type === 'spread' ? (s.spreadUnit === 'pct' ? '%' : 'bps') : '%';
+                    const isMultiple = /p\s*\/\s*e/i.test(s.instrument || s.label || '');
+                    const unit = s.type === 'spread' ? (s.spreadUnit === 'pct' ? '%' : 'bps') : (isMultiple ? 'x' : '%');
                     return (
                       <Line
                         key={s.key}
