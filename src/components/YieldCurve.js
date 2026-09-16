@@ -190,6 +190,9 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
   const [tenorRange, setTenorRange] = useState(initTenor);
   const [selectedPresets, setSelectedPresets] = useState(initPresets);
 
+  const initShowCash = packMode && packConfig ? (packConfig.showCash !== false) : (savedPrefs.showCash !== false);
+  const [showCash, setShowCash] = useState(initShowCash);
+
   // Manual reference levels (e.g. call yield) — stored in Supabase so everyone sees them
   const [markers, setMarkers] = useState([]);
   useEffect(() => {
@@ -237,8 +240,8 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
   // Save prefs to localStorage whenever they change
   useEffect(() => {
     if (packMode) return;
-    savePrefs({ activeCategories, tenorRange, selectedPresets });
-  }, [activeCategories, tenorRange, selectedPresets, packMode]);
+    savePrefs({ activeCategories, tenorRange, selectedPresets, showCash });
+  }, [activeCategories, tenorRange, selectedPresets, showCash, packMode]);
 
   const togglePreset = (label) => {
     setSelectedPresets(prev =>
@@ -342,6 +345,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
               activeCategories,
               tenorRange,
               selectedPresets,
+              showCash,
             })}
             style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
           >
@@ -378,6 +382,14 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
               {cat}
             </button>
           ))}
+          <button
+            className={`${styles.catBtn} ${showCash ? styles.catBtnOn : ''}`}
+            style={showCash ? { borderColor: '#fbbf24', color: '#fbbf24', background: '#fbbf2422' } : {}}
+            onClick={() => setShowCash(v => !v)}
+            title="Manual reference levels (call yields etc.)"
+          >
+            Cash
+          </button>
         </div>
 
         {/* Comparison date presets */}
@@ -466,7 +478,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
       {filteredSeries.length > 0 ? (
         <div className={styles.chartWrap}>
           <ResponsiveContainer width="100%" height={440}>
-            <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 24 }}>
+            <ScatterChart margin={{ top: 16, right: 24, left: showCash && markers.length ? 96 : 0, bottom: 24 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
               <XAxis
                 dataKey="x"
@@ -499,13 +511,13 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                   shape={<CustomDot fill={s.color} />}
                 />
               ))}
-              {markers.map(m => {
+              {showCash && markers.map(m => {
                 const v = Number(m.value);
                 if (isNaN(v)) return null;
-                const txt = `${m.label || 'Ref'}: ${v.toFixed(2)}%${m.marker_date ? ' · ' + fmtDate(m.marker_date) : ''}`;
+                const txt = `${m.label || 'Ref'}: ${v.toFixed(2)}%`;
                 return (
                   <ReferenceDot key={m.id} x={0} y={v} r={5} fill="#fbbf24" stroke="#0f172a" strokeWidth={1} ifOverflow="extendDomain">
-                    <Label value={txt} position="right" fill="#fbbf24" fontSize={10} fontWeight={700} />
+                    <Label value={txt} position="left" fill="#fbbf24" fontSize={10} fontWeight={700} />
                   </ReferenceDot>
                 );
               })}
