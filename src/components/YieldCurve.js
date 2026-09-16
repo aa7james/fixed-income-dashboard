@@ -3,10 +3,11 @@ import InflationLinkedBonds from './InflationLinkedBonds';
 import USYieldCurve from './USYieldCurve';
 import USInflationLinked from './USInflationLinked';
 import AddToPackButton from './AddToPackButton';
+import { supabase } from '../utils/supabase';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, Cell, ReferenceLine,
+  BarChart, Bar, Cell, ReferenceLine, ReferenceDot, Label,
 } from 'recharts';
 import styles from './YieldCurve.module.css';
 
@@ -189,6 +190,33 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
   const [tenorRange, setTenorRange] = useState(initTenor);
   const [selectedPresets, setSelectedPresets] = useState(initPresets);
 
+  // Manual reference levels (e.g. call yield) — stored in Supabase so everyone sees them
+  const [markers, setMarkers] = useState([]);
+  useEffect(() => {
+    supabase.from('yield_curve_markers').select('*').order('created_at')
+      .then(({ data: rows }) => setMarkers(rows || []))
+      .catch(() => {});
+  }, []);
+
+  const addMarker = async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: row } = await supabase.from('yield_curve_markers')
+      .insert({ label: 'Call yield', value: 7.00, marker_date: today }).select().single();
+    if (row) setMarkers(m => [...m, row]);
+  };
+  const updateMarkerLocal = (id, patch) => setMarkers(m => m.map(x => x.id === id ? { ...x, ...patch } : x));
+  const saveMarker = (id) => {
+    const mk = markers.find(x => x.id === id);
+    if (!mk) return;
+    supabase.from('yield_curve_markers')
+      .update({ label: mk.label, value: Number(mk.value) || 0, marker_date: mk.marker_date || null })
+      .eq('id', id).then(() => {});
+  };
+  const removeMarker = (id) => {
+    setMarkers(m => m.filter(x => x.id !== id));
+    supabase.from('yield_curve_markers').delete().eq('id', id).then(() => {});
+  };
+
   // Resolve preset labels to actual dates dynamically
   const comparisonDates = useMemo(() => {
     if (!latest) return [];
@@ -264,11 +292,13 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
   const yDomain = useMemo(() => {
     const all = filteredSeries.flatMap(s => s.data.map(p => p.y));
-    if (!all.length) return [0, 15];
-    const min = Math.floor(Math.min(...all) * 2) / 2;
-    const max = Math.ceil(Math.max(...all) * 2) / 2;
+    const markerVals = markers.map(m => Number(m.value)).filter(v => !isNaN(v));
+    const combined = [...all, ...markerVals];
+    if (!combined.length) return [0, 15];
+    const min = Math.floor(Math.min(...combined) * 2) / 2;
+    const max = Math.ceil(Math.max(...combined) * 2) / 2;
     return [Math.max(0, min - 0.5), max + 0.5];
-  }, [filteredSeries]);
+  }, [filteredSeries, markers]);
 
   // Spread chart data — compare latest vs first comparison date
   const spreadData = useMemo(() => {
@@ -390,6 +420,47 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
             </div>
           )}
         </div>
+
+        {/* Manual reference levels (e.g. call yield) */}
+        <div className={styles.dateRow}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, alignSelf: 'center' }}>Reference levels:</span>
+            {markers.map(m => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #334155', borderRadius: 8, padding: '3px 6px', background: '#0f172a' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#fbbf24' }} />
+                <input
+                  value={m.label || ''}
+                  onChange={e => updateMarkerLocal(m.id, { label: e.target.value })}
+                  onBlur={() => saveMarker(m.id)}
+                  placeholder="Label"
+                  style={{ width: 90, fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }}
+                />
+                <input
+                  type="number" step="0.01"
+                  value={m.value ?? ''}
+                  onChange={e => updateMarkerLocal(m.id, { value: e.target.value })}
+                  onBlur={() => saveMarker(m.id)}
+                  style={{ width: 60, fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }}
+                />
+                <span style={{ fontSize: 11, color: '#64748b' }}>%</span>
+                <input
+                  type="date"
+                  value={m.marker_date || ''}
+                  onChange={e => updateMarkerLocal(m.id, { marker_date: e.target.value })}
+                  onBlur={() => saveMarker(m.id)}
+                  style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }}
+                />
+                <button onClick={() => removeMarker(m.id)} title="Remove" style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 13 }}>✕</button>
+              </div>
+            ))}
+            <button
+              onClick={addMarker}
+              style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 12, cursor: 'pointer', border: '1px solid #fbbf24', background: 'rgba(251,191,36,0.12)', color: '#fbbf24' }}
+            >
+              + Add reference
+            </button>
+          </div>
+        </div>
       </>)}
 
       {filteredSeries.length > 0 ? (
@@ -428,6 +499,16 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                   shape={<CustomDot fill={s.color} />}
                 />
               ))}
+              {markers.map(m => {
+                const v = Number(m.value);
+                if (isNaN(v)) return null;
+                const txt = `${m.label || 'Ref'}: ${v.toFixed(2)}%${m.marker_date ? ' · ' + fmtDate(m.marker_date) : ''}`;
+                return (
+                  <ReferenceDot key={m.id} x={0} y={v} r={5} fill="#fbbf24" stroke="#0f172a" strokeWidth={1} ifOverflow="extendDomain">
+                    <Label value={txt} position="right" fill="#fbbf24" fontSize={10} fontWeight={700} />
+                  </ReferenceDot>
+                );
+              })}
             </ScatterChart>
           </ResponsiveContainer>
         </div>
