@@ -7,6 +7,8 @@ import styles from './InflationLinkedBonds.module.css';
 
 // TIPS real-yield tenors paired with their nominal Treasury counterpart.
 const TIPS_TENORS = [
+  { tenor: 2,  real: 'US 2Y TIPS',  nominal: 'US 2Y Treasury',  label: '2Y' },
+  { tenor: 3,  real: 'US 3Y TIPS',  nominal: 'US 3Y Treasury',  label: '3Y' },
   { tenor: 5,  real: 'US 5Y TIPS',  nominal: 'US 5Y Treasury',  label: '5Y' },
   { tenor: 7,  real: 'US 7Y TIPS',  nominal: 'US 7Y Treasury',  label: '7Y' },
   { tenor: 10, real: 'US 10Y TIPS', nominal: 'US 10Y Treasury', label: '10Y' },
