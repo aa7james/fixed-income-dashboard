@@ -4,6 +4,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
 import CashScenario from './CashScenario';
+import VariableNcdSchedule from './VariableNcdSchedule';
 
 // Cash instruments by tenor column. Values come from bond_data (latest row)
 // or the manual reference levels (Call / MM) in yield_curve_markers.
@@ -326,6 +327,7 @@ export default function CashTab({ data, instruments }) {
               * Tenor runs past the FRA curve ({maxFwdMonth}m); the last forward is held flat beyond that, so the FRA-implied rate is approximate.
             </p>
           )}
+          <VariableNcdSchedule latest={latest} instruments={instruments} />
         </div>
       )}
 
