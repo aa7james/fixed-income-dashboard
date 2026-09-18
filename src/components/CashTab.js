@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
 import CashScenario from './CashScenario';
 
@@ -39,6 +39,17 @@ const FraTooltip = ({ active, payload }) => {
     <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px' }}>
       <p style={{ color: '#94a3b8', fontSize: 11, margin: 0 }}>{d.label}</p>
       <p style={{ color: '#38bdf8', fontSize: 13, fontWeight: 700, margin: '2px 0 0' }}>{d.rate}%</p>
+    </div>
+  );
+};
+
+const IncrTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  return (
+    <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px' }}>
+      <p style={{ color: '#94a3b8', fontSize: 11, margin: 0 }}>{d.label}</p>
+      <p style={{ color: '#38bdf8', fontSize: 13, fontWeight: 700, margin: '2px 0 0' }}>+{d.incr}% vs base</p>
     </div>
   );
 };
@@ -104,6 +115,23 @@ export default function CashTab({ data, instruments }) {
     });
     pts.sort((a, b) => a.month - b.month);
     return pts;
+  }, [latest, instruments]);
+
+  // Cumulative increase from base: each forward rate minus today's Zaronia (in %).
+  const fraIncrease = useMemo(() => {
+    if (!latest || !instruments?.length) return [];
+    const base = latest['Zaronia'];
+    if (base == null) return [];
+    return instruments
+      .filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia'))
+      .map(f => {
+        const v = latest[f.name];
+        const m = f.name.match(/(\d+)[Xx×](\d+)/);
+        if (v == null || !m) return null;
+        return { label: `${m[1]}x${m[2]}`, month: +m[2], incr: +(Number(v) - Number(base)).toFixed(2) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.month - b.month);
   }, [latest, instruments]);
 
   const fraRead = useMemo(() => {
@@ -326,6 +354,31 @@ export default function CashTab({ data, instruments }) {
               </strong>{' '}
               {fraRead.text}
             </p>
+          )}
+
+          {/* Cumulative increase from base (as in Market Pricing) */}
+          {fraIncrease.length > 0 && (
+            <>
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#64748b', margin: '20px 0 8px' }}>
+                Cumulative increase from base
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={fraIncrease} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis
+                    dataKey="month" type="number" domain={[0, 'dataMax']}
+                    ticks={fraIncrease.map(d => d.month)}
+                    tickFormatter={m => { const pt = fraIncrease.find(d => d.month === m); return pt ? pt.label : m; }}
+                    tick={{ fill: '#64748b', fontSize: 9 }} interval={0}
+                  />
+                  <YAxis domain={[0, 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
+                  <Tooltip content={<IncrTooltip />} />
+                  <Bar dataKey="incr" name="Cum. Increase" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={28}>
+                    <LabelList dataKey="incr" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </>
           )}
         </div>
       )}
