@@ -188,7 +188,8 @@ export default function CashTab({ data, instruments }) {
         const current = (on != null && spreadBps != null) ? on + spreadBps / 100 : null;
         const avgFwd = avgForward(months);
         const fraImplied = (avgFwd != null && spreadBps != null) ? avgFwd + spreadBps / 100 : null;
-        return { tenor: tenorLbl, months, spreadBps, current, fraImplied, approx: months > maxFwdMonth };
+        const effective = fraImplied != null ? (Math.pow(1 + fraImplied / 100 / 365, 365) - 1) * 100 : null;
+        return { tenor: tenorLbl, months, spreadBps, current, fraImplied, effective, approx: months > maxFwdMonth };
       })
       .filter(x => x.spreadBps != null)
       .sort((a, b) => a.months - b.months);
@@ -289,7 +290,8 @@ export default function CashTab({ data, instruments }) {
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Variable Rate NCDs (floating)</h3>
           <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>
             Resets to Zaronia ({latest['Zaronia'] != null ? Number(latest['Zaronia']).toFixed(3) : '—'}%) + spread. <strong style={{ color: '#94a3b8' }}>Current</strong> = all-in if Zaronia stays flat.
-            {' '}<strong style={{ color: '#38bdf8' }}>FRA-implied</strong> = spread + the average Zaronia the forward curve prices over the note's life (what you'd actually earn if the FRAs come true).
+            {' '}<strong style={{ color: '#38bdf8' }}>FRA-implied</strong> = spread + the average Zaronia the forward curve prices over the note's life (nominal — compare to quoted rates).
+            {' '}<strong style={{ color: '#4ade80' }}>Effective</strong> = that path compounded daily (the realized return).
           </p>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
@@ -298,7 +300,8 @@ export default function CashTab({ data, instruments }) {
                   <th style={{ padding: '8px 12px', textAlign: 'left' }}>Tenor</th>
                   <th style={cell()}>Spread</th>
                   <th style={cell()}>Current all-in</th>
-                  <th style={cell()}>FRA-implied all-in</th>
+                  <th style={cell()}>FRA-implied (nominal)</th>
+                  <th style={cell()}>Effective (daily comp.)</th>
                   <th style={cell()}>Diff</th>
                 </tr>
               </thead>
@@ -312,6 +315,9 @@ export default function CashTab({ data, instruments }) {
                       <td style={cell({ fontWeight: 700 })}>{v.current == null ? '—' : `${v.current.toFixed(2)}%`}</td>
                       <td style={cell({ fontWeight: 700, color: '#38bdf8' })}>
                         {v.fraImplied == null ? '—' : `${v.fraImplied.toFixed(2)}%`}{v.approx ? '*' : ''}
+                      </td>
+                      <td style={cell({ fontWeight: 700, color: '#4ade80' })}>
+                        {v.effective == null ? '—' : `${v.effective.toFixed(2)}%`}{v.approx ? '*' : ''}
                       </td>
                       <td style={cell({ color: diffBps == null ? '#475569' : diffBps >= 0 ? '#4ade80' : '#fbbf24', fontSize: 12 })}>
                         {diffBps == null ? '' : `${diffBps >= 0 ? '+' : ''}${diffBps} bps`}
