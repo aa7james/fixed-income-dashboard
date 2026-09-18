@@ -10,9 +10,10 @@ import InvestmentPack from './components/InvestmentPack';
 import RefreshDataButton from './components/RefreshDataButton';
 import NewsSidebar from './components/NewsSidebar';
 import InstrumentsAdmin from './components/InstrumentsAdmin';
+import CashTab from './components/CashTab';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack', 'Instruments'];
+const TABS = ['Latest Rates', 'Cash', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack', 'Instruments'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -176,6 +177,7 @@ export default function App() {
         <>
           <main className={styles.main}>
             {activeTab === 'Latest Rates'    && <LatestRates    data={data} groups={groups} />}
+            {activeTab === 'Cash'            && <CashTab        data={data} instruments={instruments} />}
             {activeTab === 'Market Pricing'  && <MarketPricing  data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Yield Curve'     && <YieldCurve     data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
