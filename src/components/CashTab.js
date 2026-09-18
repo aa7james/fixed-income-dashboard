@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
+import CashScenario from './CashScenario';
 
 // Cash instruments by tenor column. Values come from bond_data (latest row)
 // or the manual reference levels (Call / MM) in yield_curve_markers.
@@ -356,11 +357,14 @@ export default function CashTab({ data, instruments }) {
               : `The market prices rolling short to match or beat every term rate on offer, so there's no reward for locking out — stay short and roll.`}
           </p>
           <p style={{ fontSize: 11, color: '#475569', margin: '8px 4px 0', lineHeight: 1.4 }}>
-            Roll return = simple average of the forward 3-month JIBAR strip (spot 3m + FRAs). Indicative; ignores the small
-            JIBAR/Zaronia basis and compounding.
+            Roll return = simple average of the forward 3-month Zaronia strip (spot 3m + FRAs). Indicative; ignores
+            compounding and the small credit/liquidity spread of T-Bills &amp; NCDs over the o/n benchmark.
           </p>
         </div>
       )}
+
+      {/* SECTION 5 — scenario calculator */}
+      <CashScenario latest={latest} instruments={instruments} markers={markers} />
     </div>
   );
 }
