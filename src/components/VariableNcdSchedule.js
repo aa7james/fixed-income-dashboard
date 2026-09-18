@@ -54,24 +54,35 @@ export default function VariableNcdSchedule({ latest, instruments }) {
     return inst && latest[inst.name] != null ? Number(latest[inst.name]) : null;
   }, [latest, instruments, tenor]);
 
-  const schedule = useMemo(() => {
-    if (spreadBps == null || !blocks.length) return [];
+  const { schedule, totalInterest, effective, avgYield, anyApprox } = useMemo(() => {
+    if (spreadBps == null || !blocks.length) return { schedule: [], totalInterest: 0, effective: 0, avgYield: 0, anyApprox: false };
+    const DAY = 365;
     const rows = [];
+    let balance = principal;
+    let cursor = new Date();
+    const start = new Date(cursor);
     for (let m = 1; m <= tenor; m++) {
-      const f = fwdForMonth(m); if (!f) continue;
+      const f = fwdForMonth(m); if (!f) break;
+      const next = new Date(cursor); next.setMonth(next.getMonth() + 1);
+      const days = Math.max(1, Math.round((next - cursor) / 86400000));
       const yld = f.rate + spreadBps / 100;
-      rows.push({ month: m, zaronia: +f.rate.toFixed(3), yield: +yld.toFixed(3), interest: principal * (yld / 100) / 12, approx: f.approx });
+      const factor = Math.pow(1 + (yld / 100) / DAY, days); // Zaronia compounded daily, in arrears
+      const interest = balance * (factor - 1);
+      balance *= factor;
+      rows.push({ month: m, days, zaronia: +f.rate.toFixed(3), yield: +yld.toFixed(3), interest, approx: f.approx });
+      cursor = next;
     }
-    return rows;
+    const totalDays = Math.max(1, Math.round((cursor - start) / 86400000));
+    const tot = balance - principal;
+    const eff = (Math.pow(balance / principal, 365 / totalDays) - 1) * 100;
+    const avg = rows.length ? rows.reduce((a, r) => a + r.yield, 0) / rows.length : 0;
+    return { schedule: rows, totalInterest: tot, effective: eff, avgYield: avg, anyApprox: rows.some(r => r.approx) };
   }, [spreadBps, blocks, tenor, principal]); // eslint-disable-line
-
-  const totalInterest = schedule.reduce((a, r) => a + r.interest, 0);
-  const avgYield = schedule.length ? schedule.reduce((a, r) => a + r.yield, 0) / schedule.length : 0;
-  const anyApprox = schedule.some(r => r.approx);
 
   const fixedKey = FIXED_MATCH[tenor];
   const fixedRate = fixedKey && latest[fixedKey] != null ? Number(latest[fixedKey]) : null;
-  const gap = fixedRate != null ? Math.round((fixedRate - avgYield) * 100) : null;
+  const gap = fixedRate != null ? Math.round((fixedRate - avgYield) * 100) : null;    // nominal rate view
+  const effGap = fixedRate != null ? Math.round((effective - fixedRate) * 100) : null; // realized-return view
 
   if (!latest || !blocks.length) return null;
 
@@ -79,7 +90,7 @@ export default function VariableNcdSchedule({ latest, instruments }) {
     <div style={{ marginTop: 18, borderTop: '1px solid #334155', paddingTop: 16 }}>
       <h4 style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', margin: '0 0 4px' }}>Monthly accrual — how the variable NCD earns</h4>
       <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 12px' }}>
-        Each month resets to forward Zaronia + spread ({spreadBps != null ? `+${spreadBps.toFixed(1)}bps` : '—'}). The return is the accrued sum of the monthly resets — and their average is the fair fixed rate the curve implies.
+        Each month resets to forward Zaronia + spread ({spreadBps != null ? `+${spreadBps.toFixed(1)}bps` : '—'}), compounded daily. The average reset is the fair fixed rate the curve implies; daily compounding then lifts the realized return above it.
       </p>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
@@ -134,14 +145,13 @@ export default function VariableNcdSchedule({ latest, instruments }) {
       </div>
 
       <div style={{ marginTop: 14, padding: 12, background: '#0f172a', borderRadius: 10, fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
-        <div>Projected return on {zar.format(principal)}: <strong style={{ color: '#4ade80' }}>{zar.format(totalInterest)}</strong> = <strong>{avgYield.toFixed(2)}% p.a.</strong> (the average of the monthly resets).</div>
+        <div>Projected return on {zar.format(principal)}: <strong style={{ color: '#4ade80' }}>{zar.format(totalInterest)}</strong> = <strong>{effective.toFixed(2)}% p.a. effective</strong> (Zaronia compounded daily in arrears).</div>
+        <div style={{ marginTop: 4, color: '#94a3b8' }}>Average reset rate: <strong style={{ color: '#cbd5e1' }}>{avgYield.toFixed(2)}%</strong> (nominal) — the like-for-like number vs a quoted fixed rate; daily compounding lifts it to the {effective.toFixed(2)}% effective above.</div>
         {fixedRate != null ? (
           <div style={{ marginTop: 6 }}>
-            The traded <strong>{tenor}m fixed NCD is {fixedRate.toFixed(2)}%</strong>, vs the curve-implied fair value of {avgYield.toFixed(2)}% →{' '}
-            <strong style={{ color: gap >= 0 ? '#4ade80' : '#fbbf24' }}>{gap >= 0 ? '+' : ''}{gap} bps</strong>{' '}
-            {gap >= 0
-              ? 'in the fixed. Locking the fixed pays more than the floater is expected to deliver on the curve — the floater only wins if Zaronia beats the forwards.'
-              : 'in the floater — the market expects rolling resets to beat the fixed, so the floater is favoured unless rates undershoot the curve.'}
+            vs the traded <strong>{tenor}m fixed NCD at {fixedRate.toFixed(2)}%</strong>: nominal{' '}
+            <strong style={{ color: gap >= 0 ? '#4ade80' : '#fbbf24' }}>{gap >= 0 ? '+' : ''}{gap} bps</strong> in the fixed (term premium), but on realized cash the floater's daily compounding lands{' '}
+            <strong style={{ color: effGap >= 0 ? '#4ade80' : '#fbbf24' }}>{effGap >= 0 ? '+' : ''}{effGap} bps</strong> {effGap >= 0 ? 'ahead of' : 'behind'} the fixed's simple rate.
           </div>
         ) : (
           <div style={{ marginTop: 6, color: '#64748b' }}>No traded {tenor}m fixed NCD to compare against directly.</div>
@@ -154,7 +164,7 @@ export default function VariableNcdSchedule({ latest, instruments }) {
         </p>
       )}
       <p style={{ fontSize: 11, color: '#475569', margin: '8px 4px 0' }}>
-        Simple money-market accrual on principal (interest not compounded intra-year), to compare like-for-like with quoted fixed NCD rates. Forward Zaronia from the FRA strip; actual resets will differ.
+        Zaronia compounded daily in arrears (ACT/365), spread added to each day's rate. Forward Zaronia from the FRA strip — actual daily resets will differ. Fixed NCDs are quoted simple, so use the "average reset" line for a rate-vs-rate view and the effective line for realized cash.
       </p>
     </div>
   );
