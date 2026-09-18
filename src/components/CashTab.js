@@ -115,7 +115,38 @@ export default function CashTab({ data, instruments }) {
     return { dir: 'up', text: `The market is pricing the short rate ${bps}bps HIGHER over the next ~${fraPath[fraPath.length - 1].month} months (from ${first.toFixed(2)}% to ${last.toFixed(2)}%) — i.e. rate hikes. Staying short and rolling may beat locking term.` };
   }, [fraPath]);
 
-  // Variable Rate NCDs: floating = Zaronia + spread (spread stored in bps, over Zaronia).
+  // Zaronia forward blocks (o/n + FRAs), used to project where a floating rate averages.
+  const fwdBlocks = useMemo(() => {
+    if (!latest || !instruments?.length) return [];
+    const blocks = [];
+    if (latest['Zaronia'] != null) blocks.push({ start: 0, end: 1, rate: Number(latest['Zaronia']) });
+    instruments.filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia')).forEach(f => {
+      const m = f.name.match(/(\d+)[Xx×](\d+)/);
+      const v = latest[f.name];
+      if (m && v != null) blocks.push({ start: +m[1], end: +m[2], rate: Number(v) });
+    });
+    return blocks.sort((a, b) => a.start - b.start);
+  }, [latest, instruments]);
+
+  const maxFwdMonth = fwdBlocks.length ? fwdBlocks[fwdBlocks.length - 1].end : 0;
+
+  // Average expected Zaronia over [0, T] from the forward strip; holds the last
+  // forward flat if the tenor runs past the FRA curve.
+  const avgForward = (T) => {
+    if (!fwdBlocks.length) return null;
+    let acc = 0, cov = 0, last = null;
+    for (const b of fwdBlocks) {
+      if (b.start >= T) break;
+      const s = Math.max(b.start, cov), e = Math.min(b.end, T);
+      if (e > s) { acc += b.rate * (e - s); cov = e; }
+      last = b.rate;
+    }
+    if (cov < T && last != null) { acc += last * (T - cov); cov = T; }
+    return cov > 0 ? acc / cov : null;
+  };
+
+  // Variable Rate NCDs: spread (bps over Zaronia), current all-in, and where the
+  // FRA curve implies the all-in averages over the life of the note.
   const varNcd = useMemo(() => {
     if (!latest || !instruments?.length) return [];
     const on = latest['Zaronia'] == null ? null : Number(latest['Zaronia']);
@@ -123,12 +154,16 @@ export default function CashTab({ data, instruments }) {
       .filter(i => i.category === 'Variable Rate NCDs' && i.name.toLowerCase().includes('zaronia'))
       .map(i => {
         const spreadBps = latest[i.name] == null ? null : Number(latest[i.name]);
-        const tenor = (i.name.match(/^(\d+m)/) || [])[1] || (i.display_label || i.name);
-        return { tenor, spreadBps, allIn: (on != null && spreadBps != null) ? on + spreadBps / 100 : null };
+        const tenorLbl = (i.name.match(/^(\d+m)/) || [])[1] || (i.display_label || i.name);
+        const months = parseInt(tenorLbl, 10);
+        const current = (on != null && spreadBps != null) ? on + spreadBps / 100 : null;
+        const avgFwd = avgForward(months);
+        const fraImplied = (avgFwd != null && spreadBps != null) ? avgFwd + spreadBps / 100 : null;
+        return { tenor: tenorLbl, months, spreadBps, current, fraImplied, approx: months > maxFwdMonth };
       })
       .filter(x => x.spreadBps != null)
-      .sort((a, b) => parseInt(a.tenor, 10) - parseInt(b.tenor, 10));
-  }, [latest, instruments]);
+      .sort((a, b) => a.months - b.months);
+  }, [latest, instruments, fwdBlocks]); // eslint-disable-line
 
   const fmt = (v) => v == null ? '—' : v.toFixed(2);
   const fmtPickup = (v) => v == null || callRate == null ? '' : `${v - callRate >= 0 ? '+' : ''}${((v - callRate) * 100).toFixed(0)}`;
@@ -224,30 +259,45 @@ export default function CashTab({ data, instruments }) {
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Variable Rate NCDs (floating)</h3>
           <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>
-            All-in rate = Zaronia ({latest['Zaronia'] != null ? Number(latest['Zaronia']).toFixed(3) : '—'}%) + spread. Resets with Zaronia, so the all-in moves as the o/n rate moves.
+            Resets to Zaronia ({latest['Zaronia'] != null ? Number(latest['Zaronia']).toFixed(3) : '—'}%) + spread. <strong style={{ color: '#94a3b8' }}>Current</strong> = all-in if Zaronia stays flat.
+            {' '}<strong style={{ color: '#38bdf8' }}>FRA-implied</strong> = spread + the average Zaronia the forward curve prices over the note's life (what you'd actually earn if the FRAs come true).
           </p>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
               <thead>
                 <tr style={{ color: '#94a3b8' }}>
                   <th style={{ padding: '8px 12px', textAlign: 'left' }}>Tenor</th>
-                  <th style={cell()}>Spread over Zaronia</th>
-                  <th style={cell()}>All-in (today)</th>
-                  <th style={cell()}>vs Call</th>
+                  <th style={cell()}>Spread</th>
+                  <th style={cell()}>Current all-in</th>
+                  <th style={cell()}>FRA-implied all-in</th>
+                  <th style={cell()}>Diff</th>
                 </tr>
               </thead>
               <tbody>
-                {varNcd.map(v => (
-                  <tr key={v.tenor} style={{ borderTop: '1px solid #0f172a' }}>
-                    <td style={{ padding: '8px 12px', textAlign: 'left', color: '#e2e8f0', fontWeight: 600 }}>{v.tenor}</td>
-                    <td style={cell({ color: '#94a3b8' })}>+{v.spreadBps.toFixed(1)} bps</td>
-                    <td style={cell({ fontWeight: 700 })}>{v.allIn == null ? '—' : `${v.allIn.toFixed(2)}%`}</td>
-                    <td style={cell({ color: '#475569', fontSize: 12 })}>{v.allIn == null ? '' : fmtPickup(v.allIn)}</td>
-                  </tr>
-                ))}
+                {varNcd.map(v => {
+                  const diffBps = (v.current != null && v.fraImplied != null) ? Math.round((v.fraImplied - v.current) * 100) : null;
+                  return (
+                    <tr key={v.tenor} style={{ borderTop: '1px solid #0f172a' }}>
+                      <td style={{ padding: '8px 12px', textAlign: 'left', color: '#e2e8f0', fontWeight: 600 }}>{v.tenor}</td>
+                      <td style={cell({ color: '#94a3b8' })}>+{v.spreadBps.toFixed(1)} bps</td>
+                      <td style={cell({ fontWeight: 700 })}>{v.current == null ? '—' : `${v.current.toFixed(2)}%`}</td>
+                      <td style={cell({ fontWeight: 700, color: '#38bdf8' })}>
+                        {v.fraImplied == null ? '—' : `${v.fraImplied.toFixed(2)}%`}{v.approx ? '*' : ''}
+                      </td>
+                      <td style={cell({ color: diffBps == null ? '#475569' : diffBps >= 0 ? '#4ade80' : '#fbbf24', fontSize: 12 })}>
+                        {diffBps == null ? '' : `${diffBps >= 0 ? '+' : ''}${diffBps} bps`}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {varNcd.some(v => v.approx) && (
+            <p style={{ fontSize: 11, color: '#475569', margin: '10px 4px 0' }}>
+              * Tenor runs past the FRA curve ({maxFwdMonth}m); the last forward is held flat beyond that, so the FRA-implied rate is approximate.
+            </p>
+          )}
         </div>
       )}
 
