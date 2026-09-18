@@ -1,33 +1,35 @@
 import React, { useMemo, useState, useEffect } from 'react';
 
-// Standalone cash scenario calculator: build Strategy A vs Strategy B from any
-// legs (a "roll" is just >1 leg), type in expected future rates, and see the
-// compounded money-market math and the winner. Custom instruments live in
-// localStorage (this browser only).
+// User-built cash scenario comparator: add as many options as you like, each
+// built from one or more legs (a "roll" is just an extra leg with the rate you
+// expect at that future point). Every option is ranked side by side. Custom
+// instruments live in localStorage (this browser only).
 
 const LS_KEY = 'cashCustomInstruments';
 const zar = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 });
 
-const inp = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', padding: '6px 8px', fontSize: 13, width: '100%', boxSizing: 'border-box' };
+const inp = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', padding: '6px 8px', fontSize: 13, boxSizing: 'border-box' };
 const btn = { background: '#334155', border: 'none', borderRadius: 6, color: '#e2e8f0', padding: '6px 10px', fontSize: 12, cursor: 'pointer' };
 const card = { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 };
 
-// Legs use money-market simple interest per period, compounded across legs.
-function evalStrategy(legs) {
+// Money-market simple interest per leg, compounded across legs.
+function evalOption(legs) {
   let growth = 1, months = 0;
   const steps = [];
   for (const leg of legs) {
     const r = Number(leg.rate) || 0, m = Number(leg.months) || 0;
     const g = 1 + (r / 100) * (m / 12);
     growth *= g; months += m;
-    steps.push({ r, m, g });
+    steps.push({ r, m });
   }
   const annualised = months > 0 ? (Math.pow(growth, 12 / months) - 1) * 100 : 0;
   return { growth, months, annualised, steps };
 }
 
+let uid = 1;
+const nid = () => `o${Date.now()}_${uid++}`;
+
 export default function CashScenario({ latest, instruments, markers }) {
-  // Build the instrument menu (current rates) from the live data + custom list.
   const [custom, setCustom] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
   });
@@ -35,20 +37,21 @@ export default function CashScenario({ latest, instruments, markers }) {
     try { localStorage.setItem(LS_KEY, JSON.stringify(custom)); } catch { /* ignore */ }
   }, [custom]);
 
+  // Instrument menu with today's rates.
   const menu = useMemo(() => {
     const items = [];
-    const push = (label, key, months) => {
-      const v = latest?.[key];
-      if (v != null) items.push({ label, rate: +Number(v).toFixed(3), months });
-    };
-    const mk = (label, mLabel, months) => {
-      const m = (markers || []).find(x => (x.label || '').toLowerCase() === mLabel.toLowerCase());
-      if (m) items.push({ label, rate: +Number(m.value).toFixed(3), months });
-    };
+    const push = (label, key, months) => { const v = latest?.[key]; if (v != null) items.push({ label, rate: +Number(v).toFixed(3), months }); };
+    const mk = (label, mLabel, months) => { const m = (markers || []).find(x => (x.label || '').toLowerCase() === mLabel.toLowerCase()); if (m) items.push({ label, rate: +Number(m.value).toFixed(3), months }); };
     mk('Call', 'Call', 1); mk('Money Market', 'MM', 1);
     [3, 6, 9, 12].forEach(t => push(`${t}m T-Bill`, `${t}m T-Bill`, t));
     [3, 6, 9, 12].forEach(t => push(`${t}m Fixed NCD`, `${t}m Fixed Rate NCD`, t));
     [3, 6, 9, 12].forEach(t => push(`${t}m JIBAR`, `${t}m JIBAR`, t));
+    // Variable NCDs: all-in = Zaronia + spread
+    const on = latest?.['Zaronia'];
+    (instruments || []).filter(i => i.category === 'Variable Rate NCDs' && i.name.toLowerCase().includes('zaronia')).forEach(i => {
+      const sp = latest?.[i.name]; const tenor = (i.name.match(/^(\d+)m/) || [])[1];
+      if (on != null && sp != null && tenor) items.push({ label: `${tenor}m Variable NCD`, rate: +(Number(on) + Number(sp) / 100).toFixed(3), months: Number(tenor) });
+    });
     // short-dated bonds (<=1yr) as cash
     const now = new Date();
     (instruments || []).filter(i => ['Government Bonds', 'SOE / Corporate Bonds', 'International'].includes(i.category) && i.maturity_date).forEach(i => {
@@ -61,37 +64,43 @@ export default function CashScenario({ latest, instruments, markers }) {
   }, [latest, instruments, markers, custom]);
 
   const findMenu = (label) => menu.find(m => m.label === label);
-  const defRate = (label, fallback) => (findMenu(label)?.rate ?? fallback);
 
-  // Default to James's example: 12m NCD vs rolling a 6m T-Bill into another 6m T-Bill.
   const [amount, setAmount] = useState(1000000);
-  const [stratA, setStratA] = useState(() => ({ name: 'Lock 12m NCD', legs: [{ label: '12m Fixed NCD', months: 12, rate: 0 }] }));
-  const [stratB, setStratB] = useState(() => ({ name: 'Roll 6m T-Bill x2', legs: [{ label: '6m T-Bill', months: 6, rate: 0 }, { label: '6m T-Bill', months: 6, rate: 0 }] }));
+  const [options, setOptions] = useState(() => ([
+    { id: nid(), name: '6m T-Bill, rolled @ 8%', legs: [{ label: '6m T-Bill', months: 6, rate: 0 }, { label: '6m T-Bill', months: 6, rate: 8 }] },
+    { id: nid(), name: '12m NCD', legs: [{ label: '12m Fixed NCD', months: 12, rate: 0 }] },
+    { id: nid(), name: '12m Variable NCD', legs: [{ label: '12m Variable NCD', months: 12, rate: 0 }] },
+  ]));
   const [seeded, setSeeded] = useState(false);
 
-  // Seed default rates once the menu has loaded.
+  // Fill any blank leg rates from the menu once it loads (keeps typed assumptions like 8%).
   useEffect(() => {
     if (seeded || !menu.length) return;
-    setStratA(s => ({ ...s, legs: s.legs.map(l => ({ ...l, rate: defRate(l.label, l.rate) })) }));
-    setStratB(s => ({ ...s, legs: s.legs.map(l => ({ ...l, rate: defRate(l.label, l.rate) })) }));
+    setOptions(opts => opts.map(o => ({ ...o, legs: o.legs.map(l => (!Number(l.rate) ? { ...l, rate: findMenu(l.label)?.rate ?? 0 } : l)) })));
     setSeeded(true);
   }, [menu, seeded]); // eslint-disable-line
 
-  const updateLeg = (setS, idx, patch) => setS(s => ({ ...s, legs: s.legs.map((l, i) => i === idx ? { ...l, ...patch } : l) }));
-  const pickInstrument = (setS, idx, label) => {
-    const mItem = findMenu(label);
-    updateLeg(setS, idx, mItem ? { label, rate: mItem.rate, months: mItem.months } : { label });
-  };
-  const addLeg = (setS) => setS(s => ({ ...s, legs: [...s.legs, { label: menu[0]?.label || '', months: 6, rate: menu[0]?.rate || 0 }] }));
-  const removeLeg = (setS, idx) => setS(s => ({ ...s, legs: s.legs.filter((_, i) => i !== idx) }));
+  const setOption = (id, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, ...patch } : o));
+  const updateLeg = (id, idx, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.map((l, i) => i === idx ? { ...l, ...patch } : l) } : o));
+  const pickInstrument = (id, idx, label) => { const m = findMenu(label); updateLeg(id, idx, m ? { label, rate: m.rate, months: m.months } : { label }); };
+  const addLeg = (id) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: [...o.legs, { label: menu[0]?.label || '', months: 6, rate: menu[0]?.rate || 0 }] } : o));
+  const removeLeg = (id, idx) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.filter((_, i) => i !== idx) } : o));
+  const addOption = () => setOptions(opts => [...opts, { id: nid(), name: `Option ${opts.length + 1}`, legs: [{ label: menu[0]?.label || '', months: 12, rate: menu[0]?.rate || 0 }] }]);
+  const removeOption = (id) => setOptions(opts => opts.filter(o => o.id !== id));
 
-  const evA = useMemo(() => evalStrategy(stratA.legs), [stratA]);
-  const evB = useMemo(() => evalStrategy(stratB.legs), [stratB]);
-  const matA = amount * evA.growth, matB = amount * evB.growth;
-  const winner = Math.abs(matA - matB) < 1 ? null : (matA > matB ? 'A' : 'B');
-  const diffRand = Math.abs(matA - matB);
-  const diffBps = Math.round(Math.abs(evA.annualised - evB.annualised) * 100);
-  const horizonMismatch = evA.months !== evB.months;
+  const results = useMemo(() => options.map(o => {
+    const ev = evalOption(o.legs);
+    return { ...o, ev, maturity: amount * ev.growth, interest: amount * ev.growth - amount };
+  }), [options, amount]);
+
+  const bestId = useMemo(() => {
+    if (!results.length) return null;
+    return results.reduce((a, b) => b.ev.annualised > a.ev.annualised ? b : a).id;
+  }, [results]);
+
+  const ranked = useMemo(() => [...results].sort((a, b) => b.ev.annualised - a.ev.annualised), [results]);
+  const horizons = new Set(results.map(r => r.ev.months));
+  const mixedHorizons = horizons.size > 1;
 
   // custom instrument form
   const [cName, setCName] = useState(''); const [cRate, setCRate] = useState(''); const [cMonths, setCMonths] = useState('');
@@ -103,85 +112,108 @@ export default function CashScenario({ latest, instruments, markers }) {
 
   const formula = (ev) => ev.steps.map(s => `(1 + ${s.r.toFixed(2)}% × ${s.m}/12)`).join(' × ');
 
-  const renderStrategy = (strat, setS, ev, mat, tag, isWinner) => (
-    <div style={{ flex: '1 1 320px', background: '#0f172a', border: `1px solid ${isWinner ? '#4ade80' : '#334155'}`, borderRadius: 10, padding: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <input value={strat.name} onChange={e => setS(s => ({ ...s, name: e.target.value }))}
-          style={{ ...inp, width: 'auto', flex: 1, fontWeight: 700, fontSize: 14, border: 'none', background: 'transparent', padding: 0, color: isWinner ? '#4ade80' : '#f1f5f9' }} />
-        <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>Strategy {tag}</span>
-      </div>
-      {strat.legs.map((leg, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: '#475569', width: 44 }}>{i === 0 ? 'Buy' : 'Roll →'}</span>
-          <select value={leg.label} onChange={e => pickInstrument(setS, i, e.target.value)} style={{ ...inp, flex: 2 }}>
-            {menu.map((m, k) => <option key={k} value={m.label}>{m.label}</option>)}
-          </select>
-          <input type="number" value={leg.months} onChange={e => updateLeg(setS, i, { months: e.target.value })} title="months" style={{ ...inp, width: 56, flex: '0 0 56px' }} />
-          <input type="number" step="0.01" value={leg.rate} onChange={e => updateLeg(setS, i, { rate: e.target.value })} title="rate %" style={{ ...inp, width: 68, flex: '0 0 68px' }} />
-          {strat.legs.length > 1 && <button onClick={() => removeLeg(setS, i)} style={{ ...btn, padding: '4px 8px', background: '#7f1d1d' }}>×</button>}
-        </div>
-      ))}
-      <div style={{ display: 'flex', gap: 8, marginTop: 4, marginBottom: 12 }}>
-        <button onClick={() => addLeg(setS)} style={btn}>+ Add roll</button>
-        <span style={{ fontSize: 11, color: '#64748b', alignSelf: 'center' }}>cols: instrument · months · rate %</span>
-      </div>
-      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
-        <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 11 }}>
-          {zar.format(amount)} × {formula(ev)}
-        </div>
-        <div>= <strong style={{ color: '#e2e8f0' }}>{zar.format(mat)}</strong> over {ev.months} months</div>
-        <div>Interest: <strong style={{ color: isWinner ? '#4ade80' : '#e2e8f0' }}>{zar.format(mat - amount)}</strong></div>
-        <div>Effective: <strong style={{ color: isWinner ? '#4ade80' : '#e2e8f0' }}>{ev.annualised.toFixed(2)}% p.a.</strong></div>
-      </div>
-    </div>
-  );
-
   if (!latest) return null;
 
   return (
     <div style={card}>
-      <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Scenario calculator — lock vs roll</h3>
+      <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Scenario comparator</h3>
       <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 14px' }}>
-        Build two strategies and compare. A "roll" is just a second leg — pick the instrument and type the rate you <em>expect</em> at that future point. Rates auto-fill from today's data; edit any of them.
+        Build any number of options and compare them side by side. Each option can have one or more legs — a "roll" is just an extra leg, where you type the rate you <em>expect</em> at that future point. Rates auto-fill from today's data; edit anything.
       </p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 12, color: '#94a3b8' }}>Amount (R)</label>
-        <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value) || 0)} style={{ ...inp, width: 160, flex: '0 0 160px' }} />
+        <label style={{ fontSize: 12, color: '#94a3b8' }}>Amount invested (R)</label>
+        <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value) || 0)} style={{ ...inp, width: 160 }} />
       </div>
 
+      {/* option cards */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        {renderStrategy(stratA, setStratA, evA, matA, 'A', winner === 'A')}
-        {renderStrategy(stratB, setStratB, evB, matB, 'B', winner === 'B')}
+        {results.map((o) => {
+          const isBest = o.id === bestId;
+          return (
+            <div key={o.id} style={{ flex: '1 1 300px', minWidth: 280, background: '#0f172a', border: `1px solid ${isBest ? '#4ade80' : '#334155'}`, borderRadius: 10, padding: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+                <input value={o.name} onChange={e => setOption(o.id, { name: e.target.value })}
+                  style={{ ...inp, flex: 1, fontWeight: 700, fontSize: 14, border: 'none', background: 'transparent', padding: 0, color: isBest ? '#4ade80' : '#f1f5f9' }} />
+                {results.length > 1 && <button onClick={() => removeOption(o.id)} title="remove option" style={{ ...btn, padding: '4px 8px', background: '#7f1d1d' }}>×</button>}
+              </div>
+              {o.legs.map((leg, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, color: '#475569', width: 40, flex: '0 0 40px' }}>{i === 0 ? 'Buy' : 'then'}</span>
+                  <select value={leg.label} onChange={e => pickInstrument(o.id, i, e.target.value)} style={{ ...inp, flex: 2, minWidth: 0 }}>
+                    {menu.map((m, k) => <option key={k} value={m.label}>{m.label}</option>)}
+                  </select>
+                  <input type="number" value={leg.months} onChange={e => updateLeg(o.id, i, { months: e.target.value })} title="months" style={{ ...inp, width: 52, flex: '0 0 52px' }} />
+                  <input type="number" step="0.01" value={leg.rate} onChange={e => updateLeg(o.id, i, { rate: e.target.value })} title="rate %" style={{ ...inp, width: 64, flex: '0 0 64px' }} />
+                  {o.legs.length > 1 && <button onClick={() => removeLeg(o.id, i)} style={{ ...btn, padding: '4px 7px', background: '#7f1d1d' }}>×</button>}
+                </div>
+              ))}
+              <div style={{ marginTop: 4, marginBottom: 12 }}>
+                <button onClick={() => addLeg(o.id)} style={btn}>+ Add roll / leg</button>
+                <span style={{ fontSize: 10, color: '#475569', marginLeft: 8 }}>instrument · months · rate %</span>
+              </div>
+              <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+                <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 10.5, wordBreak: 'break-word' }}>
+                  {zar.format(amount)} × {formula(o.ev)}
+                </div>
+                <div>= <strong style={{ color: '#e2e8f0' }}>{zar.format(o.maturity)}</strong> over {o.ev.months} mo</div>
+                <div>Interest: <strong style={{ color: isBest ? '#4ade80' : '#e2e8f0' }}>{zar.format(o.interest)}</strong></div>
+                <div>Effective: <strong style={{ color: isBest ? '#4ade80' : '#e2e8f0' }}>{o.ev.annualised.toFixed(2)}% p.a.</strong></div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div style={{ marginTop: 14, padding: 12, background: '#0f172a', borderRadius: 10 }}>
-        {winner ? (
-          <p style={{ fontSize: 14, color: '#e2e8f0', margin: 0, lineHeight: 1.5 }}>
-            <strong style={{ color: '#4ade80' }}>Winner: Strategy {winner} — {(winner === 'A' ? stratA : stratB).name}.</strong>{' '}
-            It earns <strong>{zar.format(diffRand)}</strong> more ({diffBps} bps p.a.) over the horizon, on your assumptions.
-          </p>
-        ) : (
-          <p style={{ fontSize: 14, color: '#94a3b8', margin: 0 }}>The two strategies break even on these assumptions.</p>
-        )}
-        {horizonMismatch && (
-          <p style={{ fontSize: 12, color: '#fbbf24', margin: '6px 0 0' }}>
-            ⚠ The two strategies cover different horizons (A: {evA.months}m, B: {evB.months}m). For a fair lock-vs-roll call, match the total months — compare on "Effective % p.a." rather than the rand amount.
-          </p>
-        )}
-        <p style={{ fontSize: 11, color: '#475569', margin: '8px 0 0' }}>
-          Money-market simple interest per leg, compounded across legs. Ignores day-count precision, tax and any bid/offer.
-        </p>
+      <div style={{ marginTop: 12 }}>
+        <button onClick={addOption} style={{ ...btn, background: '#0ea5e9', fontWeight: 700 }}>+ Add option</button>
       </div>
+
+      {/* ranked summary */}
+      {results.length > 1 && (
+        <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', marginBottom: 8 }}>Ranking (best first)</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
+            <thead>
+              <tr style={{ color: '#94a3b8' }}>
+                <th style={{ padding: '6px 8px', textAlign: 'left' }}>#</th>
+                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Option</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Horizon</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Interest</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Effective % p.a.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((r, i) => (
+                <tr key={r.id} style={{ borderTop: '1px solid #1e293b', color: i === 0 ? '#4ade80' : '#e2e8f0', fontWeight: i === 0 ? 700 : 400 }}>
+                  <td style={{ padding: '6px 8px', textAlign: 'left' }}>{i + 1}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'left' }}>{r.name}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.months} mo</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zar.format(r.interest)}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.annualised.toFixed(2)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {mixedHorizons && (
+            <p style={{ fontSize: 12, color: '#fbbf24', margin: '8px 0 0' }}>
+              ⚠ Options cover different horizons — the ranking uses "Effective % p.a." so they're comparable. The rand interest is over each option's own horizon.
+            </p>
+          )}
+          <p style={{ fontSize: 11, color: '#475569', margin: '8px 0 0' }}>
+            Money-market simple interest per leg, compounded across legs. Ignores day-count precision, tax and any bid/offer.
+          </p>
+        </div>
+      )}
 
       {/* custom instruments */}
       <div style={{ marginTop: 18, borderTop: '1px solid #334155', paddingTop: 14 }}>
         <h4 style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', margin: '0 0 4px' }}>Add your own instrument</h4>
-        <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 10px' }}>Saved in this browser. Appears in the dropdowns above with a ★.</p>
+        <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 10px' }}>e.g. something you found on Bloomberg. Saved in this browser; appears in the dropdowns with a ★.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input placeholder="Name (e.g. Corporate paper)" value={cName} onChange={e => setCName(e.target.value)} style={{ ...inp, width: 200, flex: '0 0 200px' }} />
-          <input type="number" step="0.01" placeholder="Rate %" value={cRate} onChange={e => setCRate(e.target.value)} style={{ ...inp, width: 90, flex: '0 0 90px' }} />
-          <input type="number" placeholder="Months" value={cMonths} onChange={e => setCMonths(e.target.value)} style={{ ...inp, width: 90, flex: '0 0 90px' }} />
+          <input placeholder="Name (e.g. XYZ corporate paper)" value={cName} onChange={e => setCName(e.target.value)} style={{ ...inp, width: 220 }} />
+          <input type="number" step="0.01" placeholder="Rate %" value={cRate} onChange={e => setCRate(e.target.value)} style={{ ...inp, width: 90 }} />
+          <input type="number" placeholder="Months" value={cMonths} onChange={e => setCMonths(e.target.value)} style={{ ...inp, width: 90 }} />
           <button onClick={addCustom} style={{ ...btn, background: '#0ea5e9' }}>Add</button>
         </div>
         {custom.length > 0 && (

@@ -130,42 +130,8 @@ export default function CashTab({ data, instruments }) {
       .sort((a, b) => parseInt(a.tenor, 10) - parseInt(b.tenor, 10));
   }, [latest, instruments]);
 
-  // Term vs roll: lock the best term rate now, or stay short and roll the Zaronia strip?
-  // Build the forward 3-month strip from the Zaronia FRAs. The spot 3m (months 0-3)
-  // isn't quoted directly, so approximate it from the overnight + 1x2 + 2x3 forwards.
-  const termVsRoll = useMemo(() => {
-    if (!latest) return [];
-    const num = k => latest[k] == null ? null : Number(latest[k]);
-    const near = [num('Zaronia'), num('FRA 1x2 - Zaronia'), num('FRA 2x3 - Zaronia')].filter(x => x != null);
-    const spot3 = near.length ? near.reduce((a, b) => a + b, 0) / near.length : null;
-    const blocks = [spot3, num('FRA 3X6 - Zaronia'), num('FRA 6X9 - Zaronia'), num('FRA 9X12 - Zaronia')]; // 0-3, 3-6, 6-9, 9-12
-    if (blocks[0] == null) return [];
-    const horizons = [
-      { col: '6m',  n: 2, label: '6 months' },
-      { col: '9m',  n: 3, label: '9 months' },
-      { col: '12m', n: 4, label: '12 months' },
-    ];
-    return horizons.map(h => {
-      const legs = blocks.slice(0, h.n);
-      if (legs.some(x => x == null)) return null;
-      const roll = legs.reduce((a, b) => a + b, 0) / legs.length; // avg forward-3m over the horizon
-      const lock = bestByCol[h.col];
-      if (lock == null) return null;
-      const pickup = Math.round((lock - roll) * 100); // bps: +ve => locking beats expected roll
-      const verdict = pickup > 5 ? 'Lock' : pickup < -5 ? 'Roll' : 'Neutral';
-      return { ...h, lock, roll, pickup, verdict };
-    }).filter(Boolean);
-  }, [latest, bestByCol]);
-
-  const bestLock = useMemo(() => {
-    const wins = termVsRoll.filter(r => r.pickup > 5);
-    if (!wins.length) return null;
-    return wins.reduce((a, b) => b.pickup > a.pickup ? b : a);
-  }, [termVsRoll]);
-
   const fmt = (v) => v == null ? '—' : v.toFixed(2);
   const fmtPickup = (v) => v == null || callRate == null ? '' : `${v - callRate >= 0 ? '+' : ''}${((v - callRate) * 100).toFixed(0)}`;
-  const vColor = (v) => v === 'Lock' ? '#4ade80' : v === 'Roll' ? '#fbbf24' : '#94a3b8';
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
@@ -314,56 +280,7 @@ export default function CashTab({ data, instruments }) {
         </div>
       )}
 
-      {/* SECTION 4 — term vs roll (the decision) */}
-      {termVsRoll.length > 0 && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Lock or roll?</h3>
-          <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>
-            "Lock" = best term rate you can put on now. "Roll (implied)" = the market's expected return from staying short
-            and rolling the 3-month JIBAR strip over the same horizon. Pickup &gt; 0 means locking beats the expected roll.
-          </p>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
-              <thead>
-                <tr style={{ color: '#94a3b8' }}>
-                  <th style={{ padding: '8px 12px', textAlign: 'left' }}>Horizon</th>
-                  <th style={cell()}>Lock now</th>
-                  <th style={cell()}>Roll (implied)</th>
-                  <th style={cell()}>Pickup for locking</th>
-                  <th style={cell()}>Verdict</th>
-                </tr>
-              </thead>
-              <tbody>
-                {termVsRoll.map(r => (
-                  <tr key={r.col} style={{ borderTop: '1px solid #0f172a' }}>
-                    <td style={{ padding: '8px 12px', textAlign: 'left', color: '#94a3b8' }}>{r.label}</td>
-                    <td style={cell({ fontWeight: 700 })}>{r.lock.toFixed(2)}%</td>
-                    <td style={cell({ color: '#cbd5e1' })}>{r.roll.toFixed(2)}%</td>
-                    <td style={cell({ color: r.pickup >= 0 ? '#4ade80' : '#fbbf24', fontWeight: 700 })}>
-                      {r.pickup >= 0 ? '+' : ''}{r.pickup} bps
-                    </td>
-                    <td style={cell({ color: vColor(r.verdict), fontWeight: 700 })}>{r.verdict}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p style={{ fontSize: 13, color: '#cbd5e1', margin: '12px 4px 0', lineHeight: 1.5 }}>
-            <strong style={{ color: bestLock ? '#4ade80' : '#fbbf24' }}>
-              {bestLock ? '✓ Sweet spot' : '→ Stay short'}:
-            </strong>{' '}
-            {bestLock
-              ? `Locking ${bestLock.label} at ${bestLock.lock.toFixed(2)}% earns +${bestLock.pickup}bps over what the market expects rolling to return (${bestLock.roll.toFixed(2)}%) — the best term pickup on the curve.`
-              : `The market prices rolling short to match or beat every term rate on offer, so there's no reward for locking out — stay short and roll.`}
-          </p>
-          <p style={{ fontSize: 11, color: '#475569', margin: '8px 4px 0', lineHeight: 1.4 }}>
-            Roll return = simple average of the forward 3-month Zaronia strip (spot 3m + FRAs). Indicative; ignores
-            compounding and the small credit/liquidity spread of T-Bills &amp; NCDs over the o/n benchmark.
-          </p>
-        </div>
-      )}
-
-      {/* SECTION 5 — scenario calculator */}
+      {/* SECTION 4 — scenario comparator */}
       <CashScenario latest={latest} instruments={instruments} markers={markers} />
     </div>
   );
