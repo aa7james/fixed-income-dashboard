@@ -58,15 +58,17 @@ function avgOverBlocks(blocks, a, b) {
   return cov > 0 ? acc / cov : null;
 }
 
-// Every roll ladder that reaches 12 months using 3/6/9/12m legs.
-const LADDERS = [
-  { key: 'lock12', label: 'Lock 12m', parts: [12] },
-  { key: '9_3', label: '9m → 3m', parts: [9, 3] },
-  { key: '3_9', label: '3m → 9m', parts: [3, 9] },
-  { key: '6_6', label: '6m → 6m', parts: [6, 6] },
-  { key: '6_3_3', label: '6m → 3m → 3m', parts: [6, 3, 3] },
-  { key: '3x4', label: '3m rolled ×4', parts: [3, 3, 3, 3] },
-];
+// Every ordered way to reach 12 months using 3/6/9/12-month legs.
+function compositions(target, parts) {
+  const out = [];
+  const rec = (rem, acc) => {
+    if (rem === 0) { out.push(acc.slice()); return; }
+    for (const p of parts) if (p <= rem) rec(rem - p, [...acc, p]);
+  };
+  rec(target, []);
+  return out;
+}
+const COMPS = compositions(12, [3, 6, 9, 12]);
 
 let uid = 1;
 const nid = () => `o${Date.now()}_${uid++}`;
@@ -121,24 +123,27 @@ export default function CashScenario({ latest, instruments, markers }) {
   const avgFwd = (a, b) => avgOverBlocks(fwdBlocks, a, b);
 
   const [amount, setAmount] = useState(1000000);
-  const [scenInstrument, setScenInstrument] = useState('NCD'); // 'NCD' | 'T-Bill' | 'Both'
+  const [scenInstrument, setScenInstrument] = useState('Both'); // 'NCD' | 'T-Bill' | 'Both'
 
-  // Build the roll ladders for an instrument. First leg = today's rate for the tenor;
-  // each later leg = today's rate for that tenor + the FRA-implied forward move.
+  // Build every roll ladder for an instrument. First leg = today's rate for the tenor;
+  // each later leg = today's rate for that tenor + how much the FRA curve rises to that
+  // start month (forward move) — NOT the raw FRA rate.
   const genFor = (instr) => {
     const spotKey = (T) => instr === 'NCD' ? `${T}m Fixed Rate NCD` : `${T}m T-Bill`;
     const menuLabel = (T) => instr === 'NCD' ? `${T}m Fixed NCD` : `${T}m T-Bill`;
     const spot = (T) => { const v = latest?.[spotKey(T)]; return v == null ? null : Number(v); };
-    return LADDERS.map(L => {
+    return COMPS.map(parts => {
       let S = 0; const legs = []; let ok = true;
-      for (const T of L.parts) {
+      for (const T of parts) {
         const s = spot(T); if (s == null) { ok = false; break; }
         const a0 = avgFwd(0, T), aS = avgFwd(S, S + T);
-        const inc = (a0 != null && aS != null) ? (aS - a0) : 0; // FRA-implied forward move for this tenor at month S
-        legs.push({ label: menuLabel(T), months: T, rate: +(s + inc).toFixed(3) });
+        const move = (S > 0 && a0 != null && aS != null) ? (aS - a0) : 0; // FRA rise from today to month S, for this tenor
+        legs.push({ label: menuLabel(T), months: T, rate: +(s + move).toFixed(3), _spot: +s.toFixed(3), _move: +move.toFixed(3) });
         S += T;
       }
-      return ok ? { id: `gen_${instr}_${L.key}`, name: `${instr} · ${L.label}`, legs } : null;
+      if (!ok) return null;
+      const label = parts.length === 1 ? `Lock ${parts[0]}m` : parts.map(p => `${p}m`).join(' → ');
+      return { id: `gen_${instr}_${parts.join('_')}`, name: `${instr} · ${label}`, legs };
     }).filter(Boolean);
   };
 
@@ -253,17 +258,28 @@ export default function CashScenario({ latest, instruments, markers }) {
                   style={{ ...inp, flex: 1, fontWeight: 700, fontSize: 14, border: 'none', background: 'transparent', padding: 0, color: isBest ? '#4ade80' : '#f1f5f9' }} />
                 {results.length > 1 && <button onClick={() => removeOption(o.id)} title="remove option" style={{ ...btn, padding: '4px 8px', background: '#7f1d1d' }}>×</button>}
               </div>
-              {o.legs.map((leg, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, color: '#475569', width: 40, flex: '0 0 40px' }}>{i === 0 ? 'Buy' : 'then'}</span>
-                  <select value={leg.label} onChange={e => pickInstrument(o.id, i, e.target.value)} style={{ ...inp, flex: 2, minWidth: 0 }}>
-                    {menu.map((m, k) => <option key={k} value={m.label}>{m.label}</option>)}
-                  </select>
-                  <input type="number" value={leg.months} onChange={e => updateLeg(o.id, i, { months: e.target.value })} title="months" style={{ ...inp, width: 52, flex: '0 0 52px' }} />
-                  <input type="number" step="0.01" value={leg.rate} onChange={e => updateLeg(o.id, i, { rate: e.target.value })} title="rate %" style={{ ...inp, width: 64, flex: '0 0 64px' }} />
-                  {o.legs.length > 1 && <button onClick={() => removeLeg(o.id, i)} style={{ ...btn, padding: '4px 7px', background: '#7f1d1d' }}>×</button>}
-                </div>
-              ))}
+              {o.legs.map((leg, i) => {
+                const showNote = i > 0 && leg._move != null && leg._spot != null &&
+                  Math.abs(Number(leg.rate) - (leg._spot + leg._move)) < 0.005;
+                return (
+                  <div key={i}>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: showNote ? 1 : 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: '#475569', width: 40, flex: '0 0 40px' }}>{i === 0 ? 'Buy' : 'then'}</span>
+                      <select value={leg.label} onChange={e => pickInstrument(o.id, i, e.target.value)} style={{ ...inp, flex: 2, minWidth: 0 }}>
+                        {menu.map((m, k) => <option key={k} value={m.label}>{m.label}</option>)}
+                      </select>
+                      <input type="number" value={leg.months} onChange={e => updateLeg(o.id, i, { months: e.target.value })} title="months" style={{ ...inp, width: 52, flex: '0 0 52px' }} />
+                      <input type="number" step="0.01" value={leg.rate} onChange={e => updateLeg(o.id, i, { rate: e.target.value })} title="rate %" style={{ ...inp, width: 64, flex: '0 0 64px' }} />
+                      {o.legs.length > 1 && <button onClick={() => removeLeg(o.id, i)} style={{ ...btn, padding: '4px 7px', background: '#7f1d1d' }}>×</button>}
+                    </div>
+                    {showNote && (
+                      <div style={{ fontSize: 10, color: '#64748b', margin: '0 0 6px 46px' }}>
+                        = {leg._spot.toFixed(2)}% today {leg._move >= 0 ? '+' : ''}{(leg._move * 100).toFixed(0)}bps FRA move
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <div style={{ marginTop: 4, marginBottom: 12 }}>
                 <button onClick={() => addLeg(o.id)} style={btn}>+ Add roll / leg</button>
                 <span style={{ fontSize: 10, color: '#475569', marginLeft: 8 }}>instrument · months · rate %</span>
