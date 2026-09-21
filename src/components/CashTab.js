@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import CashScenario from './CashScenario';
 import VariableNcdSchedule from './VariableNcdSchedule';
+import CashRollChart from './CashRollChart';
 
 // Cash instruments by tenor column. Values come from bond_data (latest row)
 // or the manual reference levels (Call / MM) in yield_curve_markers.
@@ -390,6 +391,9 @@ export default function CashTab({ data, instruments }) {
           )}
         </div>
       )}
+
+      {/* SECTION 3c — rolling vs locking over time */}
+      <CashRollChart latest={latest} instruments={instruments} />
 
       {/* SECTION 4 — scenario comparator */}
       <CashScenario latest={latest} instruments={instruments} markers={markers} />
