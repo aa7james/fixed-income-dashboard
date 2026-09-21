@@ -70,6 +70,17 @@ function compositions(target, parts) {
 }
 const COMPS = compositions(12, [3, 6, 9, 12]);
 
+// All ways to assign an instrument (NCD or T-Bill) to each of n legs.
+function instrumentVectors(n) {
+  let out = [[]];
+  for (let i = 0; i < n; i++) {
+    const next = [];
+    for (const v of out) { next.push([...v, 'NCD']); next.push([...v, 'T-Bill']); }
+    out = next;
+  }
+  return out;
+}
+
 let uid = 1;
 const nid = () => `o${Date.now()}_${uid++}`;
 
@@ -123,33 +134,37 @@ export default function CashScenario({ latest, instruments, markers }) {
   const avgFwd = (a, b) => avgOverBlocks(fwdBlocks, a, b);
 
   const [amount, setAmount] = useState(1000000);
-  const [scenInstrument, setScenInstrument] = useState('Both'); // 'NCD' | 'T-Bill' | 'Both'
+  const [scenInstrument, setScenInstrument] = useState('All'); // 'NCD' | 'T-Bill' | 'All' (all mixes)
 
-  // Build every roll ladder for an instrument. First leg = today's rate for the tenor;
-  // each later leg = today's rate for that tenor + how much the FRA curve rises to that
-  // start month (forward move) — NOT the raw FRA rate.
-  const genFor = (instr) => {
-    const spotKey = (T) => instr === 'NCD' ? `${T}m Fixed Rate NCD` : `${T}m T-Bill`;
-    const menuLabel = (T) => instr === 'NCD' ? `${T}m Fixed NCD` : `${T}m T-Bill`;
-    const spot = (T) => { const v = latest?.[spotKey(T)]; return v == null ? null : Number(v); };
-    return COMPS.map(parts => {
-      let S = 0; const legs = []; let ok = true;
-      for (const T of parts) {
-        const s = spot(T); if (s == null) { ok = false; break; }
-        const a0 = avgFwd(0, T), aS = avgFwd(S, S + T);
-        const move = (S > 0 && a0 != null && aS != null) ? (aS - a0) : 0; // FRA rise from today to month S, for this tenor
-        legs.push({ label: menuLabel(T), months: T, rate: +(s + move).toFixed(3), _spot: +s.toFixed(3), _move: +move.toFixed(3) });
-        S += T;
-      }
-      if (!ok) return null;
-      const label = parts.length === 1 ? `Lock ${parts[0]}m` : parts.map(p => `${p}m`).join(' → ');
-      return { id: `gen_${instr}_${parts.join('_')}`, name: `${instr} · ${label}`, legs };
-    }).filter(Boolean);
-  };
-
+  // Build ladders. Each leg's rate = today's rate for that instrument+tenor + how much
+  // the FRA curve rises to that start month (forward move) — NOT the raw FRA rate.
+  // 'All' includes every T-Bill/NCD mix per leg; 'NCD'/'T-Bill' keep legs pure.
   const generated = useMemo(() => {
     if (!latest) return [];
-    return scenInstrument === 'Both' ? [...genFor('NCD'), ...genFor('T-Bill')] : genFor(scenInstrument);
+    const spotKey = (instr, T) => instr === 'NCD' ? `${T}m Fixed Rate NCD` : `${T}m T-Bill`;
+    const menuLabel = (instr, T) => instr === 'NCD' ? `${T}m Fixed NCD` : `${T}m T-Bill`;
+    const spot = (instr, T) => { const v = latest[spotKey(instr, T)]; return v == null ? null : Number(v); };
+    const out = [];
+    COMPS.forEach(parts => {
+      const vectors = scenInstrument === 'NCD' ? [parts.map(() => 'NCD')]
+        : scenInstrument === 'T-Bill' ? [parts.map(() => 'T-Bill')]
+          : instrumentVectors(parts.length);
+      vectors.forEach(vec => {
+        let S = 0; const legs = []; let ok = true;
+        parts.forEach((T, idx) => {
+          const instr = vec[idx];
+          const s = spot(instr, T); if (s == null) { ok = false; return; }
+          const a0 = avgFwd(0, T), aS = avgFwd(S, S + T);
+          const move = (S > 0 && a0 != null && aS != null) ? (aS - a0) : 0;
+          legs.push({ label: menuLabel(instr, T), months: T, rate: +(s + move).toFixed(3), _spot: +s.toFixed(3), _move: +move.toFixed(3) });
+          S += T;
+        });
+        if (!ok) return;
+        const name = parts.map((T, idx) => `${vec[idx] === 'NCD' ? 'NCD' : 'TB'} ${T}m`).join(' → ');
+        out.push({ id: `gen_${parts.join('_')}_${vec.map(v => v === 'NCD' ? 'N' : 'T').join('')}`, name, legs });
+      });
+    });
+    return out;
   }, [latest, fwdBlocks, scenInstrument]); // eslint-disable-line
 
   // Load the generated scenarios; reset whenever the data date or instrument changes.
@@ -233,14 +248,14 @@ export default function CashScenario({ latest, instruments, markers }) {
     <div style={card}>
       <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Scenario comparator</h3>
       <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 14px' }}>
-        Pre-loaded with every roll-to-12-month ladder for the selected instrument. First leg = today's rate; each later leg = today's rate for that tenor <strong>+ the FRA-implied forward move</strong>. Rates refresh with the data. Edit anything, or "+ Add option" to build your own.
+        Every roll-to-12-month ladder, including all T-Bill/NCD mixes per leg ("All" ≈ 54 paths; "NCD"/"T-Bill" keep legs pure). Each leg = today's rate for that instrument+tenor <strong>+ how much the FRA curve rises to that point</strong> (shown under each roll leg). Rates refresh with the data. Edit anything, or "+ Add option" to build your own.
       </p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 12, color: '#94a3b8' }}>Amount invested (R)</label>
         <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value) || 0)} style={{ ...inp, width: 160 }} />
         <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 12 }}>Scenarios:</span>
-        {['NCD', 'T-Bill', 'Both'].map(x => (
+        {['NCD', 'T-Bill', 'All'].map(x => (
           <button key={x} onClick={() => setScenInstrument(x)}
             style={{ ...btn, background: scenInstrument === x ? '#0ea5e9' : '#1e293b', color: scenInstrument === x ? '#fff' : '#94a3b8', fontWeight: scenInstrument === x ? 700 : 400 }}>{x}</button>
         ))}
