@@ -231,12 +231,12 @@ export default function CashScenario({ latest, instruments, markers }) {
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
             {zar.format(amount)} growing under each option. Roll legs show as kinks where the rate changes; lines end at each option's horizon.
           </div>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={480}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
-              <YAxis domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} width={64}
-                tickFormatter={v => `R${(v / 1000).toFixed(0)}k`} />
+              <YAxis domain={['dataMin', 'dataMax']} tick={{ fill: '#64748b', fontSize: 10 }} width={64}
+                allowDecimals={false} tickFormatter={v => `R${(v / 1000).toFixed(1)}k`} />
               <Tooltip content={renderTip} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {options.map((o, i) => {
