@@ -156,7 +156,7 @@ export default function CashScenario({ latest, instruments, markers }) {
           const s = spot(instr, T); if (s == null) { ok = false; return; }
           const a0 = avgFwd(0, T), aS = avgFwd(S, S + T);
           const move = (S > 0 && a0 != null && aS != null) ? (aS - a0) : 0;
-          legs.push({ label: menuLabel(instr, T), months: T, rate: +(s + move).toFixed(3), _spot: +s.toFixed(3), _move: +move.toFixed(3) });
+          legs.push({ label: menuLabel(instr, T), months: T, rate: +(s + move).toFixed(3), _spot: +s.toFixed(3), _move: +move.toFixed(3), _a0: a0 != null ? +a0.toFixed(2) : null, _aS: aS != null ? +aS.toFixed(2) : null });
           S += T;
         });
         if (!ok) return;
@@ -289,7 +289,8 @@ export default function CashScenario({ latest, instruments, markers }) {
                     </div>
                     {showNote && (
                       <div style={{ fontSize: 10, color: '#64748b', margin: '0 0 6px 46px' }}>
-                        = {leg._spot.toFixed(2)}% today {leg._move >= 0 ? '+' : ''}{(leg._move * 100).toFixed(0)}bps FRA move
+                        = {leg._spot.toFixed(2)}% + {(leg._move * 100).toFixed(0)}bps
+                        {leg._a0 != null && leg._aS != null ? ` · fwd ${leg.months}m FRA ${leg._a0.toFixed(2)}→${leg._aS.toFixed(2)}%` : ''}
                       </div>
                     )}
                   </div>
