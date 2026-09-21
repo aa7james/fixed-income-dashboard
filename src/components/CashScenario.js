@@ -1,4 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 // User-built cash scenario comparator: add as many options as you like, each
 // built from one or more legs (a "roll" is just an extra leg with the rate you
@@ -24,6 +27,23 @@ function evalOption(legs) {
   }
   const annualised = months > 0 ? (Math.pow(growth, 12 / months) - 1) * 100 : 0;
   return { growth, months, annualised, steps };
+}
+
+const COLORS = ['#38bdf8', '#4ade80', '#fbbf24', '#a78bfa', '#f87171', '#2dd4bf', '#f472b6', '#fb923c'];
+
+// Value of an option (base = amount) at a given month: simple interest within
+// each leg, reinvested (compounded) at each roll.
+function optionValue(legs, month, base) {
+  let bal = base, elapsed = 0;
+  for (const leg of legs) {
+    const len = Number(leg.months) || 0, rate = Number(leg.rate) || 0;
+    if (month <= elapsed) return bal;
+    const within = Math.min(month - elapsed, len);
+    if (within < len) return bal * (1 + (rate / 100) * (within / 12));
+    bal *= (1 + (rate / 100) * (len / 12));
+    elapsed += len;
+  }
+  return bal;
 }
 
 let uid = 1;
@@ -92,6 +112,33 @@ export default function CashScenario({ latest, instruments, markers }) {
     const ev = evalOption(o.legs);
     return { ...o, ev, maturity: amount * ev.growth, interest: amount * ev.growth - amount };
   }), [options, amount]);
+
+  // Value-over-time points for every option, at monthly steps to the longest horizon.
+  const chartData = useMemo(() => {
+    const totals = options.map(o => o.legs.reduce((a, l) => a + (Number(l.months) || 0), 0));
+    const maxT = Math.max(1, ...totals);
+    const rows = [];
+    for (let m = 0; m <= maxT; m++) {
+      const row = { month: m };
+      options.forEach((o, i) => { row['v' + i] = m <= totals[i] ? +optionValue(o.legs, m, amount).toFixed(2) : null; });
+      rows.push(row);
+    }
+    return rows;
+  }, [options, amount]);
+
+  const renderTip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px' }}>
+        <p style={{ color: '#94a3b8', fontSize: 11, margin: '0 0 4px' }}>Month {label}</p>
+        {payload.filter(p => p.value != null).map(p => (
+          <p key={p.dataKey} style={{ color: p.color, fontSize: 12, margin: '2px 0' }}>
+            {p.name}: <strong>{zar.format(p.value)}</strong> ({((p.value / amount - 1) * 100).toFixed(2)}%)
+          </p>
+        ))}
+      </div>
+    );
+  };
 
   const bestId = useMemo(() => {
     if (!results.length) return null;
@@ -168,6 +215,30 @@ export default function CashScenario({ latest, instruments, markers }) {
       <div style={{ marginTop: 12 }}>
         <button onClick={addOption} style={{ ...btn, background: '#0ea5e9', fontWeight: 700 }}>+ Add option</button>
       </div>
+
+      {/* value over time of each option you've built */}
+      {chartData.length > 1 && (
+        <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', marginBottom: 2 }}>Value over time</div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
+            {zar.format(amount)} growing under each option. Roll legs show as kinks where the rate changes; lines end at each option's horizon.
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
+              <YAxis domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} width={64}
+                tickFormatter={v => `R${(v / 1000).toFixed(0)}k`} />
+              <Tooltip content={renderTip} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {options.map((o, i) => (
+                <Line key={o.id} type="monotone" dataKey={'v' + i} name={o.name}
+                  stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* ranked summary */}
       {results.length > 1 && (
