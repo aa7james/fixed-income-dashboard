@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 
 // User-built cash scenario comparator: add as many options as you like, each
@@ -232,6 +232,18 @@ export default function CashScenario({ latest, instruments, markers }) {
   const horizons = new Set(results.map(r => r.ev.months));
   const mixedHorizons = horizons.size > 1;
 
+  const [cardsOpen, setCardsOpen] = useState(false);         // option cards collapsed by default
+  const [filterMode, setFilterMode] = useState('topN');       // 'topN' | 'minYield' | 'all'
+  const [topN, setTopN] = useState(10);
+  const [minYield, setMinYield] = useState(7.8);
+  const visibleIds = useMemo(() => {
+    let sel;
+    if (filterMode === 'topN') sel = ranked.slice(0, Math.max(1, topN));
+    else if (filterMode === 'minYield') sel = ranked.filter(r => r.ev.annualised >= minYield);
+    else sel = ranked;
+    return new Set(sel.map(r => r.id));
+  }, [ranked, filterMode, topN, minYield]);
+
   // custom instrument form
   const [cName, setCName] = useState(''); const [cRate, setCRate] = useState(''); const [cMonths, setCMonths] = useState('');
   const addCustom = () => {
@@ -262,7 +274,14 @@ export default function CashScenario({ latest, instruments, markers }) {
         <button onClick={() => { setOptions(generated); }} style={btn} title="Reset to the live FRA-implied ladders">↻ Reset</button>
       </div>
 
-      {/* option cards */}
+      {/* option cards (collapsible) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <button onClick={() => setCardsOpen(o => !o)} style={{ ...btn, fontWeight: 700 }}>
+          {cardsOpen ? '▾' : '▸'} Options ({results.length})
+        </button>
+        <span style={{ fontSize: 11, color: '#64748b' }}>{cardsOpen ? 'click to minimise' : 'click to expand & edit'}</span>
+      </div>
+      {cardsOpen && (<>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {results.map((o) => {
           const isBest = o.id === bestId;
@@ -316,13 +335,27 @@ export default function CashScenario({ latest, instruments, markers }) {
       <div style={{ marginTop: 12 }}>
         <button onClick={addOption} style={{ ...btn, background: '#0ea5e9', fontWeight: 700 }}>+ Add option</button>
       </div>
+      </>)}
 
       {/* value over time of each option you've built */}
       {chartData.length > 1 && (
         <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', marginBottom: 2 }}>Value over time</div>
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
-            {zar.format(amount)} growing under each option. Roll legs show as kinks where the rate changes; lines end at each option's horizon.
+            {zar.format(amount)} growing under each option. Roll legs show as kinks; hover a line for its name and value.
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Show:</span>
+            {[['topN', 'Top N'], ['minYield', 'Yield ≥'], ['all', 'All']].map(([m, lbl]) => (
+              <button key={m} onClick={() => setFilterMode(m)}
+                style={{ ...btn, background: filterMode === m ? '#0ea5e9' : '#1e293b', color: filterMode === m ? '#fff' : '#94a3b8', fontWeight: filterMode === m ? 700 : 400 }}>{lbl}</button>
+            ))}
+            {filterMode === 'topN' && <input type="number" value={topN} onChange={e => setTopN(Number(e.target.value) || 1)} style={{ ...inp, width: 60 }} />}
+            {filterMode === 'minYield' && <>
+              <input type="number" step="0.05" value={minYield} onChange={e => setMinYield(Number(e.target.value) || 0)} style={{ ...inp, width: 72 }} />
+              <span style={{ fontSize: 12, color: '#64748b' }}>% p.a.</span>
+            </>}
+            <span style={{ fontSize: 11, color: '#64748b' }}>showing {visibleIds.size} of {results.length}</span>
           </div>
           <ResponsiveContainer width="100%" height={480}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
@@ -331,8 +364,8 @@ export default function CashScenario({ latest, instruments, markers }) {
               <YAxis domain={['dataMin', 'dataMax']} tick={{ fill: '#64748b', fontSize: 10 }} width={64}
                 allowDecimals={false} tickFormatter={v => `R${(v / 1000).toFixed(1)}k`} />
               <Tooltip content={renderTip} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
               {options.map((o, i) => {
+                if (!visibleIds.has(o.id)) return null;
                 const color = COLORS[i % COLORS.length];
                 const rollDot = (props) => {
                   const { cx, cy, payload, index } = props;
