@@ -46,6 +46,28 @@ function optionValue(legs, month, base) {
   return bal;
 }
 
+// Time-weighted average forward Zaronia over [a,b], holding the last forward flat past the curve.
+function avgOverBlocks(blocks, a, b) {
+  let acc = 0, cov = 0, last = null;
+  for (const bl of blocks) {
+    const s = Math.max(bl.start, a), e = Math.min(bl.end, b);
+    if (e > s) { acc += bl.rate * (e - s); cov += (e - s); }
+    if (bl.start < b) last = bl.rate;
+  }
+  if (cov < (b - a) && last != null) { acc += last * ((b - a) - cov); cov = b - a; }
+  return cov > 0 ? acc / cov : null;
+}
+
+// Every roll ladder that reaches 12 months using 3/6/9/12m legs.
+const LADDERS = [
+  { key: 'lock12', label: 'Lock 12m', parts: [12] },
+  { key: '9_3', label: '9m → 3m', parts: [9, 3] },
+  { key: '3_9', label: '3m → 9m', parts: [3, 9] },
+  { key: '6_6', label: '6m → 6m', parts: [6, 6] },
+  { key: '6_3_3', label: '6m → 3m → 3m', parts: [6, 3, 3] },
+  { key: '3x4', label: '3m rolled ×4', parts: [3, 3, 3, 3] },
+];
+
 let uid = 1;
 const nid = () => `o${Date.now()}_${uid++}`;
 
@@ -85,20 +107,53 @@ export default function CashScenario({ latest, instruments, markers }) {
 
   const findMenu = (label) => menu.find(m => m.label === label);
 
-  const [amount, setAmount] = useState(1000000);
-  const [options, setOptions] = useState(() => ([
-    { id: nid(), name: '6m T-Bill, rolled @ 8%', legs: [{ label: '6m T-Bill', months: 6, rate: 0 }, { label: '6m T-Bill', months: 6, rate: 8 }] },
-    { id: nid(), name: '12m NCD', legs: [{ label: '12m Fixed NCD', months: 12, rate: 0 }] },
-    { id: nid(), name: '12m Variable NCD', legs: [{ label: '12m Variable NCD', months: 12, rate: 0 }] },
-  ]));
-  const [seeded, setSeeded] = useState(false);
+  // Zaronia forward blocks + average-forward helper (for FRA-implied assumptions).
+  const fwdBlocks = useMemo(() => {
+    if (!latest || !instruments?.length) return [];
+    const b = [];
+    if (latest['Zaronia'] != null) b.push({ start: 0, end: 1, rate: Number(latest['Zaronia']) });
+    instruments.filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia')).forEach(f => {
+      const m = f.name.match(/(\d+)[Xx×](\d+)/); const v = latest[f.name];
+      if (m && v != null) b.push({ start: +m[1], end: +m[2], rate: Number(v) });
+    });
+    return b.sort((x, y) => x.start - y.start);
+  }, [latest, instruments]);
+  const avgFwd = (a, b) => avgOverBlocks(fwdBlocks, a, b);
 
-  // Fill any blank leg rates from the menu once it loads (keeps typed assumptions like 8%).
+  const [amount, setAmount] = useState(1000000);
+  const [scenInstrument, setScenInstrument] = useState('NCD'); // 'NCD' | 'T-Bill' | 'Both'
+
+  // Build the roll ladders for an instrument. First leg = today's rate for the tenor;
+  // each later leg = today's rate for that tenor + the FRA-implied forward move.
+  const genFor = (instr) => {
+    const spotKey = (T) => instr === 'NCD' ? `${T}m Fixed Rate NCD` : `${T}m T-Bill`;
+    const menuLabel = (T) => instr === 'NCD' ? `${T}m Fixed NCD` : `${T}m T-Bill`;
+    const spot = (T) => { const v = latest?.[spotKey(T)]; return v == null ? null : Number(v); };
+    return LADDERS.map(L => {
+      let S = 0; const legs = []; let ok = true;
+      for (const T of L.parts) {
+        const s = spot(T); if (s == null) { ok = false; break; }
+        const a0 = avgFwd(0, T), aS = avgFwd(S, S + T);
+        const inc = (a0 != null && aS != null) ? (aS - a0) : 0; // FRA-implied forward move for this tenor at month S
+        legs.push({ label: menuLabel(T), months: T, rate: +(s + inc).toFixed(3) });
+        S += T;
+      }
+      return ok ? { id: `gen_${instr}_${L.key}`, name: `${instr} · ${L.label}`, legs } : null;
+    }).filter(Boolean);
+  };
+
+  const generated = useMemo(() => {
+    if (!latest) return [];
+    return scenInstrument === 'Both' ? [...genFor('NCD'), ...genFor('T-Bill')] : genFor(scenInstrument);
+  }, [latest, fwdBlocks, scenInstrument]); // eslint-disable-line
+
+  // Load the generated scenarios; reset whenever the data date or instrument changes.
+  const [options, setOptions] = useState([]);
+  const [loadedSig, setLoadedSig] = useState('');
+  const sig = `${scenInstrument}|${latest?.dateStr || ''}`;
   useEffect(() => {
-    if (seeded || !menu.length) return;
-    setOptions(opts => opts.map(o => ({ ...o, legs: o.legs.map(l => (!Number(l.rate) ? { ...l, rate: findMenu(l.label)?.rate ?? 0 } : l)) })));
-    setSeeded(true);
-  }, [menu, seeded]); // eslint-disable-line
+    if (generated.length && sig !== loadedSig) { setOptions(generated); setLoadedSig(sig); }
+  }, [generated, sig, loadedSig]);
 
   const setOption = (id, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, ...patch } : o));
   const updateLeg = (id, idx, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.map((l, i) => i === idx ? { ...l, ...patch } : l) } : o));
@@ -173,12 +228,18 @@ export default function CashScenario({ latest, instruments, markers }) {
     <div style={card}>
       <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Scenario comparator</h3>
       <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 14px' }}>
-        Build any number of options and compare them side by side. Each option can have one or more legs — a "roll" is just an extra leg, where you type the rate you <em>expect</em> at that future point. Rates auto-fill from today's data; edit anything.
+        Pre-loaded with every roll-to-12-month ladder for the selected instrument. First leg = today's rate; each later leg = today's rate for that tenor <strong>+ the FRA-implied forward move</strong>. Rates refresh with the data. Edit anything, or "+ Add option" to build your own.
       </p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 12, color: '#94a3b8' }}>Amount invested (R)</label>
         <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value) || 0)} style={{ ...inp, width: 160 }} />
+        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 12 }}>Scenarios:</span>
+        {['NCD', 'T-Bill', 'Both'].map(x => (
+          <button key={x} onClick={() => setScenInstrument(x)}
+            style={{ ...btn, background: scenInstrument === x ? '#0ea5e9' : '#1e293b', color: scenInstrument === x ? '#fff' : '#94a3b8', fontWeight: scenInstrument === x ? 700 : 400 }}>{x}</button>
+        ))}
+        <button onClick={() => { setOptions(generated); }} style={btn} title="Reset to the live FRA-implied ladders">↻ Reset</button>
       </div>
 
       {/* option cards */}
