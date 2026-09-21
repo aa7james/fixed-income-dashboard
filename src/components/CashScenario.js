@@ -126,6 +126,14 @@ export default function CashScenario({ latest, instruments, markers }) {
     return rows;
   }, [options, amount]);
 
+  // Months at which each option rolls (leg boundaries, excluding start and maturity).
+  const rollSets = useMemo(() => options.map(o => {
+    const rolls = new Set();
+    let acc = 0;
+    for (let k = 0; k < o.legs.length - 1; k++) { acc += Number(o.legs[k].months) || 0; rolls.add(acc); }
+    return rolls;
+  }), [options]);
+
   const renderTip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     return (
@@ -231,10 +239,20 @@ export default function CashScenario({ latest, instruments, markers }) {
                 tickFormatter={v => `R${(v / 1000).toFixed(0)}k`} />
               <Tooltip content={renderTip} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              {options.map((o, i) => (
-                <Line key={o.id} type="monotone" dataKey={'v' + i} name={o.name}
-                  stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
-              ))}
+              {options.map((o, i) => {
+                const color = COLORS[i % COLORS.length];
+                const rollDot = (props) => {
+                  const { cx, cy, payload, index } = props;
+                  if (payload && cx != null && cy != null && rollSets[i]?.has(payload.month)) {
+                    return <circle key={`r${i}-${index}`} cx={cx} cy={cy} r={4.5} fill={color} stroke="#0f172a" strokeWidth={1.5} />;
+                  }
+                  return <g key={`r${i}-${index}`} />;
+                };
+                return (
+                  <Line key={o.id} type="monotone" dataKey={'v' + i} name={o.name}
+                    stroke={color} strokeWidth={2} dot={rollDot} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />
+                );
+              })}
             </LineChart>
           </ResponsiveContainer>
         </div>
