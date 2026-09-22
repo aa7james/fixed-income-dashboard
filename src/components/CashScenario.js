@@ -232,6 +232,19 @@ export default function CashScenario({ latest, instruments, markers }) {
   const horizons = new Set(results.map(r => r.ev.months));
   const mixedHorizons = horizons.size > 1;
 
+  const [methodOpen, setMethodOpen] = useState(false);        // methodology reference collapsed by default
+  // Live worked example (2nd 6m T-Bill leg) so the reference always matches the data.
+  const methodEg = useMemo(() => {
+    if (!latest) return null;
+    const num = k => latest[k] == null ? null : Number(latest[k]);
+    const tb6 = num('6m T-Bill'), on = num('Zaronia'), f12 = num('FRA 1x2 - Zaronia'),
+      f23 = num('FRA 2x3 - Zaronia'), f36 = num('FRA 3X6 - Zaronia'),
+      f69 = num('FRA 6X9 - Zaronia'), f912 = num('FRA 9X12 - Zaronia');
+    const a0 = avgFwd(0, 6), aS = avgFwd(6, 12);
+    if ([tb6, on, f12, f23, f36, f69, f912, a0, aS].some(x => x == null)) return null;
+    return { tb6, on, f12, f23, f36, f69, f912, a0, aS, move: aS - a0, rate: tb6 + (aS - a0) };
+  }, [latest, fwdBlocks]); // eslint-disable-line
+
   const [cardsOpen, setCardsOpen] = useState(false);         // option cards collapsed by default
   const [filterMode, setFilterMode] = useState('topN');       // 'topN' | 'minYield' | 'all'
   const [topN, setTopN] = useState(10);
@@ -439,6 +452,51 @@ export default function CashScenario({ latest, instruments, markers }) {
                 <button onClick={() => setCustom(list => list.filter(x => x.id !== c.id))} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', marginLeft: 6, fontSize: 13 }}>×</button>
               </span>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* methodology reference */}
+      <div style={{ marginTop: 18, borderTop: '1px solid #334155', paddingTop: 14 }}>
+        <button onClick={() => setMethodOpen(o => !o)} style={{ ...btn, fontWeight: 700 }}>
+          {methodOpen ? '▾' : '▸'} How the forward (roll) rate is calculated
+        </button>
+        {methodOpen && (
+          <div style={{ marginTop: 12, fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 10px' }}>
+              A roll leg's rate = <strong>today's rate for that instrument+tenor + how much the FRA curve says that rate rises to the leg's start</strong>. It's a no-arbitrage <em>break-even</em>, not a forecast — realised rates often come in a little lower (term premium).
+            </p>
+            <p style={{ margin: '0 0 6px', color: '#94a3b8' }}><strong>General rule</strong> — for a leg of tenor T starting at month S:</p>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, color: '#e2e8f0', margin: '0 0 4px' }}>
+              leg rate = today's rate(T) + [ avgFRA(S → S+T) − avgFRA(0 → T) ]
+            </div>
+            <p style={{ margin: '0 0 12px', fontSize: 11, color: '#64748b' }}>
+              where avgFRA(a → b) = each FRA block's rate × its number of months, summed across the window, ÷ the window length (time-weighted average of the Zaronia forward strip).
+            </p>
+
+            {methodEg && (
+              <>
+                <p style={{ margin: '0 0 6px', color: '#94a3b8' }}><strong>Worked example (live)</strong> — 2nd leg of a 6m → 6m T-Bill roll:</p>
+                <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.8, wordBreak: 'break-word' }}>
+                  <div style={{ color: '#64748b' }}>Step 1 — today's FRA 6m rate (months 0–6):</div>
+                  <div>(Zaronia×1 + 1x2×1 + 2x3×1 + 3x6×3) ÷ 6</div>
+                  <div>= ({methodEg.on} + {methodEg.f12} + {methodEg.f23} + {methodEg.f36}×3) ÷ 6 = <strong style={{ color: '#38bdf8' }}>{methodEg.a0.toFixed(3)}%</strong></div>
+                  <div style={{ color: '#64748b', marginTop: 8 }}>Step 2 — FRA 6m rate in 6 months (months 6–12):</div>
+                  <div>(6x9×3 + 9x12×3) ÷ 6</div>
+                  <div>= ({methodEg.f69}×3 + {methodEg.f912}×3) ÷ 6 = <strong style={{ color: '#38bdf8' }}>{methodEg.aS.toFixed(3)}%</strong></div>
+                  <div style={{ color: '#64748b', marginTop: 8 }}>Step 3 — forward move = Step 2 − Step 1:</div>
+                  <div>= {methodEg.aS.toFixed(3)} − {methodEg.a0.toFixed(3)} = <strong style={{ color: '#fbbf24' }}>{methodEg.move >= 0 ? '+' : ''}{(methodEg.move).toFixed(3)}% ({(methodEg.move * 100).toFixed(0)}bps)</strong></div>
+                  <div style={{ color: '#64748b', marginTop: 8 }}>Step 4 — assumed 2nd 6m T-Bill = today's 6m T-Bill + move:</div>
+                  <div>= {methodEg.tb6.toFixed(2)} + {(methodEg.move).toFixed(3)} = <strong style={{ color: '#4ade80' }}>{methodEg.rate.toFixed(3)}%</strong></div>
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748b' }}>
+                  Values above are today's live FRA strip + 6m T-Bill, so this always matches the tool. As at {latest.dateStr}.
+                </p>
+              </>
+            )}
+            <p style={{ margin: '10px 0 0', fontSize: 11, color: '#475569' }}>
+              Returns then use money-market simple interest per leg, compounded across legs. The forward move rides on the Zaronia FRA curve — if the FRA data is stale, the moves are too.
+            </p>
           </div>
         )}
       </div>
