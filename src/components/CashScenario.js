@@ -370,7 +370,7 @@ export default function CashScenario({ latest, instruments, markers }) {
             </>}
             <span style={{ fontSize: 11, color: '#64748b' }}>showing {visibleIds.size} of {results.length}</span>
           </div>
-          <ResponsiveContainer width="100%" height={480}>
+          <ResponsiveContainer width="100%" height={640}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
