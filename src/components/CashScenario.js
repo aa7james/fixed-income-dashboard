@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -9,6 +9,8 @@ import {
 // instruments live in localStorage (this browser only).
 
 const LS_KEY = 'cashCustomInstruments';
+const LS_OPTS = 'cashManualOptions';
+const loadManualOptions = () => { try { return JSON.parse(localStorage.getItem(LS_OPTS) || '[]'); } catch { return []; } };
 const zar = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 });
 
 const inp = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', padding: '6px 8px', fontSize: 13, boxSizing: 'border-box' };
@@ -183,12 +185,24 @@ export default function CashScenario({ latest, instruments, markers }) {
   }, [latest, scenInstrument]); // eslint-disable-line
 
   // Load the generated scenarios; reset whenever the data date or instrument changes.
+  // Manually-added options (id not starting "gen_") persist across refreshes via localStorage.
   const [options, setOptions] = useState([]);
   const [loadedSig, setLoadedSig] = useState('');
+  const manualRef = useRef(loadManualOptions());
   const sig = `${scenInstrument}|${latest?.dateStr || ''}`;
   useEffect(() => {
-    if (generated.length && sig !== loadedSig) { setOptions(generated); setLoadedSig(sig); }
+    if (generated.length && sig !== loadedSig) {
+      setOptions([...generated, ...manualRef.current]);
+      setLoadedSig(sig);
+    }
   }, [generated, sig, loadedSig]);
+  // Persist the manual options whenever they change (after the first load).
+  useEffect(() => {
+    if (!loadedSig) return;
+    const manual = options.filter(o => !String(o.id).startsWith('gen_'));
+    manualRef.current = manual;
+    try { localStorage.setItem(LS_OPTS, JSON.stringify(manual)); } catch { /* ignore */ }
+  }, [options, loadedSig]);
 
   const setOption = (id, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, ...patch } : o));
   const updateLeg = (id, idx, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.map((l, i) => i === idx ? { ...l, ...patch } : l) } : o));
@@ -268,13 +282,20 @@ export default function CashScenario({ latest, instruments, markers }) {
   const [filterMode, setFilterMode] = useState('topN');       // 'topN' | 'minYield' | 'all'
   const [topN, setTopN] = useState(10);
   const [minYield, setMinYield] = useState(7.8);
+  const [maxTenor, setMaxTenor] = useState(0); // 0 = any; else longest single leg allowed (months)
+  // Fund-eligible universe: only ladders whose every leg is within the max tenor.
+  const eligible = useMemo(() => {
+    if (!maxTenor) return ranked;
+    return ranked.filter(r => (r.rlegs || []).every(l => (l.months || 0) <= maxTenor));
+  }, [ranked, maxTenor]);
   const visibleIds = useMemo(() => {
     let sel;
-    if (filterMode === 'topN') sel = ranked.slice(0, Math.max(1, topN));
-    else if (filterMode === 'minYield') sel = ranked.filter(r => r.ev.annualised >= minYield);
-    else sel = ranked;
+    if (filterMode === 'topN') sel = eligible.slice(0, Math.max(1, topN));
+    else if (filterMode === 'minYield') sel = eligible.filter(r => r.ev.annualised >= minYield);
+    else sel = eligible;
     return new Set(sel.map(r => r.id));
-  }, [ranked, filterMode, topN, minYield]);
+  }, [eligible, filterMode, topN, minYield]);
+  const isManual = (id) => !String(id).startsWith('gen_');
 
   // custom instrument form
   const [cName, setCName] = useState(''); const [cRate, setCRate] = useState(''); const [cMonths, setCMonths] = useState('');
@@ -303,7 +324,7 @@ export default function CashScenario({ latest, instruments, markers }) {
           <button key={x} onClick={() => setScenInstrument(x)}
             style={{ ...btn, background: scenInstrument === x ? '#0ea5e9' : '#1e293b', color: scenInstrument === x ? '#fff' : '#94a3b8', fontWeight: scenInstrument === x ? 700 : 400 }}>{x}</button>
         ))}
-        <button onClick={() => { setOptions(generated); }} style={btn} title="Reset to the live FRA-implied ladders">↻ Reset</button>
+        <button onClick={() => { setOptions([...generated, ...manualRef.current]); }} style={btn} title="Recompute the FRA-implied ladders (keeps your manual options)">↻ Reset</button>
       </div>
 
       {/* option cards (collapsible) */}
@@ -396,6 +417,12 @@ export default function CashScenario({ latest, instruments, markers }) {
               <span style={{ fontSize: 12, color: '#64748b' }}>% p.a.</span>
             </>}
             <span style={{ fontSize: 11, color: '#64748b' }}>showing {visibleIds.size} of {results.length}</span>
+            <span style={{ width: 1, height: 18, background: '#334155', margin: '0 4px' }} />
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Max tenor (fund limit):</span>
+            {[[0, 'Any'], [3, '≤3m'], [6, '≤6m'], [9, '≤9m']].map(([v, lbl]) => (
+              <button key={v} onClick={() => setMaxTenor(v)}
+                style={{ ...btn, background: maxTenor === v ? '#0ea5e9' : '#1e293b', color: maxTenor === v ? '#fff' : '#94a3b8', fontWeight: maxTenor === v ? 700 : 400 }}>{lbl}</button>
+            ))}
           </div>
           <ResponsiveContainer width="100%" height={640}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
@@ -427,7 +454,12 @@ export default function CashScenario({ latest, instruments, markers }) {
       {/* ranked summary */}
       {results.length > 1 && (
         <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', marginBottom: 8 }}>Ranking (best first)</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1' }}>
+              Ranking (best first){maxTenor ? ` — within ≤${maxTenor}m` : ''} · {eligible.length} option{eligible.length === 1 ? '' : 's'}
+            </div>
+            <div style={{ fontSize: 11, color: '#fbbf24' }}>✎ amber = your manual option</div>
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
             <thead>
               <tr style={{ color: '#94a3b8' }}>
@@ -439,15 +471,20 @@ export default function CashScenario({ latest, instruments, markers }) {
               </tr>
             </thead>
             <tbody>
-              {ranked.map((r, i) => (
-                <tr key={r.id} style={{ borderTop: '1px solid #1e293b', color: i === 0 ? '#4ade80' : '#e2e8f0', fontWeight: i === 0 ? 700 : 400 }}>
-                  <td style={{ padding: '6px 8px', textAlign: 'left' }}>{i + 1}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'left' }}>{r.name}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.months} mo</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zar.format(r.interest)}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.annualised.toFixed(2)}%</td>
-                </tr>
-              ))}
+              {eligible.map((r, i) => {
+                const manual = isManual(r.id);
+                const color = manual ? '#fbbf24' : (i === 0 ? '#4ade80' : '#e2e8f0');
+                const weight = (manual || i === 0) ? 700 : 400;
+                return (
+                  <tr key={r.id} style={{ borderTop: '1px solid #1e293b', color, fontWeight: weight }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'left' }}>{i + 1}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'left' }}>{manual ? '✎ ' : ''}{r.name}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.months} mo</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zar.format(r.interest)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.annualised.toFixed(2)}%</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {mixedHorizons && (
