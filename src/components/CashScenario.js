@@ -208,6 +208,12 @@ export default function CashScenario({ latest, instruments, markers }) {
   const updateLeg = (id, idx, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.map((l, i) => i === idx ? { ...l, ...patch } : l) } : o));
   const pickInstrument = (id, idx, label) => { const m = findMenu(label); updateLeg(id, idx, m ? { label, months: m.months, override: undefined } : { label }); };
   const addLeg = (id) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: [...o.legs, { label: menu[0]?.label || '', months: 3 }] } : o));
+  // Duplicate the last leg: same instrument + tenor, rate auto-forecasts (no override) for its new position.
+  const duplicateLeg = (id) => setOptions(opts => opts.map(o => {
+    if (o.id !== id || !o.legs.length) return o;
+    const last = o.legs[o.legs.length - 1];
+    return { ...o, legs: [...o.legs, { label: last.label, months: last.months }] };
+  }));
   const removeLeg = (id, idx) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.filter((_, i) => i !== idx) } : o));
   const addOption = () => setOptions(opts => [...opts, { id: nid(), name: `Option ${opts.length + 1}`, legs: [{ label: menu[0]?.label || '', months: 12 }] }]);
   const removeOption = (id) => setOptions(opts => opts.filter(o => o.id !== id));
@@ -376,9 +382,10 @@ export default function CashScenario({ latest, instruments, markers }) {
                   </div>
                 );
               })}
-              <div style={{ marginTop: 4, marginBottom: 12 }}>
+              <div style={{ marginTop: 4, marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 <button onClick={() => addLeg(o.id)} style={btn}>+ Add roll / leg</button>
-                <span style={{ fontSize: 10, color: '#475569', marginLeft: 8 }}>instrument · months · rate% (auto)</span>
+                <button onClick={() => duplicateLeg(o.id)} style={btn} title="Add a leg with the same instrument as the last leg; rate auto-forecasts">⧉ Duplicate last leg</button>
+                <span style={{ fontSize: 10, color: '#475569' }}>instrument · months · rate% (auto)</span>
               </div>
               <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
                 <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 10.5, wordBreak: 'break-word' }}>
