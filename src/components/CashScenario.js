@@ -133,6 +133,30 @@ export default function CashScenario({ latest, instruments, markers }) {
   }, [latest, instruments]);
   const avgFwd = (a, b) => avgOverBlocks(fwdBlocks, a, b);
 
+  // Resolve each leg's rate: today's spot for that instrument + the FRA-implied
+  // forward move for its start month (S = sum of prior legs' months). A user-typed
+  // value (leg.override) wins. Recomputes automatically as legs/months change.
+  const resolveLegs = (legs) => {
+    let S = 0;
+    return legs.map(l => {
+      const base = findMenu(l.label)?.rate;
+      const T = Number(l.months) || 0;
+      const a0 = S > 0 ? avgFwd(0, T) : null;
+      const aS = S > 0 ? avgFwd(S, S + T) : null;
+      const move = (S > 0 && a0 != null && aS != null) ? (aS - a0) : 0;
+      const computed = base != null ? +(base + move).toFixed(3) : 0;
+      const hasOverride = l.override != null && l.override !== '';
+      const res = {
+        ...l, months: T, rate: hasOverride ? Number(l.override) : computed,
+        _spot: base != null ? +base.toFixed(3) : null, _move: +move.toFixed(3),
+        _a0: a0 != null ? +a0.toFixed(2) : null, _aS: aS != null ? +aS.toFixed(2) : null,
+        _computed: computed, _override: hasOverride, _startM: S,
+      };
+      S += T;
+      return res;
+    });
+  };
+
   const [amount, setAmount] = useState(1000000);
   const [scenInstrument, setScenInstrument] = useState('All'); // 'NCD' | 'T-Bill' | 'All' (all mixes)
 
@@ -141,31 +165,22 @@ export default function CashScenario({ latest, instruments, markers }) {
   // 'All' includes every T-Bill/NCD mix per leg; 'NCD'/'T-Bill' keep legs pure.
   const generated = useMemo(() => {
     if (!latest) return [];
-    const spotKey = (instr, T) => instr === 'NCD' ? `${T}m Fixed Rate NCD` : `${T}m T-Bill`;
     const menuLabel = (instr, T) => instr === 'NCD' ? `${T}m Fixed NCD` : `${T}m T-Bill`;
-    const spot = (instr, T) => { const v = latest[spotKey(instr, T)]; return v == null ? null : Number(v); };
+    const has = (instr, T) => latest[instr === 'NCD' ? `${T}m Fixed Rate NCD` : `${T}m T-Bill`] != null;
     const out = [];
     COMPS.forEach(parts => {
       const vectors = scenInstrument === 'NCD' ? [parts.map(() => 'NCD')]
         : scenInstrument === 'T-Bill' ? [parts.map(() => 'T-Bill')]
           : instrumentVectors(parts.length);
       vectors.forEach(vec => {
-        let S = 0; const legs = []; let ok = true;
-        parts.forEach((T, idx) => {
-          const instr = vec[idx];
-          const s = spot(instr, T); if (s == null) { ok = false; return; }
-          const a0 = avgFwd(0, T), aS = avgFwd(S, S + T);
-          const move = (S > 0 && a0 != null && aS != null) ? (aS - a0) : 0;
-          legs.push({ label: menuLabel(instr, T), months: T, rate: +(s + move).toFixed(3), _spot: +s.toFixed(3), _move: +move.toFixed(3), _a0: a0 != null ? +a0.toFixed(2) : null, _aS: aS != null ? +aS.toFixed(2) : null });
-          S += T;
-        });
-        if (!ok) return;
+        if (!parts.every((T, idx) => has(vec[idx], T))) return;
+        const legs = parts.map((T, idx) => ({ label: menuLabel(vec[idx], T), months: T }));
         const name = parts.map((T, idx) => `${vec[idx] === 'NCD' ? 'NCD' : 'TB'} ${T}m`).join(' → ');
         out.push({ id: `gen_${parts.join('_')}_${vec.map(v => v === 'NCD' ? 'N' : 'T').join('')}`, name, legs });
       });
     });
     return out;
-  }, [latest, fwdBlocks, scenInstrument]); // eslint-disable-line
+  }, [latest, scenInstrument]); // eslint-disable-line
 
   // Load the generated scenarios; reset whenever the data date or instrument changes.
   const [options, setOptions] = useState([]);
@@ -177,29 +192,33 @@ export default function CashScenario({ latest, instruments, markers }) {
 
   const setOption = (id, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, ...patch } : o));
   const updateLeg = (id, idx, patch) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.map((l, i) => i === idx ? { ...l, ...patch } : l) } : o));
-  const pickInstrument = (id, idx, label) => { const m = findMenu(label); updateLeg(id, idx, m ? { label, rate: m.rate, months: m.months } : { label }); };
-  const addLeg = (id) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: [...o.legs, { label: menu[0]?.label || '', months: 6, rate: menu[0]?.rate || 0 }] } : o));
+  const pickInstrument = (id, idx, label) => { const m = findMenu(label); updateLeg(id, idx, m ? { label, months: m.months, override: undefined } : { label }); };
+  const addLeg = (id) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: [...o.legs, { label: menu[0]?.label || '', months: 3 }] } : o));
   const removeLeg = (id, idx) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.filter((_, i) => i !== idx) } : o));
-  const addOption = () => setOptions(opts => [...opts, { id: nid(), name: `Option ${opts.length + 1}`, legs: [{ label: menu[0]?.label || '', months: 12, rate: menu[0]?.rate || 0 }] }]);
+  const addOption = () => setOptions(opts => [...opts, { id: nid(), name: `Option ${opts.length + 1}`, legs: [{ label: menu[0]?.label || '', months: 12 }] }]);
   const removeOption = (id) => setOptions(opts => opts.filter(o => o.id !== id));
 
-  const results = useMemo(() => options.map(o => {
-    const ev = evalOption(o.legs);
-    return { ...o, ev, maturity: amount * ev.growth, interest: amount * ev.growth - amount };
-  }), [options, amount]);
+  // Resolve every option's legs (derive FRA-implied rates) once, and reuse.
+  const resolved = useMemo(() => options.map(o => resolveLegs(o.legs)), [options, menu, fwdBlocks]); // eslint-disable-line
+
+  const results = useMemo(() => options.map((o, i) => {
+    const rl = resolved[i] || [];
+    const ev = evalOption(rl);
+    return { ...o, rlegs: rl, ev, maturity: amount * ev.growth, interest: amount * ev.growth - amount };
+  }), [options, resolved, amount]);
 
   // Value-over-time points for every option, at monthly steps to the longest horizon.
   const chartData = useMemo(() => {
-    const totals = options.map(o => o.legs.reduce((a, l) => a + (Number(l.months) || 0), 0));
+    const totals = resolved.map(rl => rl.reduce((a, l) => a + (l.months || 0), 0));
     const maxT = Math.max(1, ...totals);
     const rows = [];
     for (let m = 0; m <= maxT; m++) {
       const row = { month: m };
-      options.forEach((o, i) => { row['v' + i] = m <= totals[i] ? +optionValue(o.legs, m, amount).toFixed(2) : null; });
+      resolved.forEach((rl, i) => { row['v' + i] = m <= totals[i] ? +optionValue(rl, m, amount).toFixed(2) : null; });
       rows.push(row);
     }
     return rows;
-  }, [options, amount]);
+  }, [resolved, amount]);
 
   // Months at which each option rolls (leg boundaries, excluding start and maturity).
   const rollSets = useMemo(() => options.map(o => {
@@ -273,7 +292,7 @@ export default function CashScenario({ latest, instruments, markers }) {
     <div style={card}>
       <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Scenario comparator</h3>
       <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 14px' }}>
-        Every roll-to-12-month ladder, including all T-Bill/NCD mixes per leg ("All" ≈ 54 paths; "NCD"/"T-Bill" keep legs pure). Each leg = today's rate for that instrument+tenor <strong>+ how much the FRA curve rises to that point</strong> (shown under each roll leg). Rates refresh with the data. Edit anything, or "+ Add option" to build your own.
+        Every roll-to-12-month ladder, including all T-Bill/NCD mixes per leg ("All" ≈ 54 paths; "NCD"/"T-Bill" keep legs pure). <strong>Rates fill in automatically</strong>: first leg = today's rate; each roll = today's rate for that tenor + the FRA-implied forward move for its start month (shown under the leg). This applies to your own builds too — add legs and the rates compute themselves; type over any rate to use your own view (↺ reverts to FRA-implied). Rates refresh with the data.
       </p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
@@ -305,24 +324,32 @@ export default function CashScenario({ latest, instruments, markers }) {
                   style={{ ...inp, flex: 1, fontWeight: 700, fontSize: 14, border: 'none', background: 'transparent', padding: 0, color: isBest ? '#4ade80' : '#f1f5f9' }} />
                 {results.length > 1 && <button onClick={() => removeOption(o.id)} title="remove option" style={{ ...btn, padding: '4px 8px', background: '#7f1d1d' }}>×</button>}
               </div>
-              {o.legs.map((leg, i) => {
-                const showNote = i > 0 && leg._move != null && leg._spot != null &&
-                  Math.abs(Number(leg.rate) - (leg._spot + leg._move)) < 0.005;
+              {o.rlegs.map((leg, i) => {
+                const isRoll = i > 0;
+                const showAuto = isRoll && !leg._override && leg._spot != null && leg._a0 != null && leg._aS != null;
                 return (
                   <div key={i}>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: showNote ? 1 : 6, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: isRoll ? 1 : 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 10, color: '#475569', width: 40, flex: '0 0 40px' }}>{i === 0 ? 'Buy' : 'then'}</span>
                       <select value={leg.label} onChange={e => pickInstrument(o.id, i, e.target.value)} style={{ ...inp, flex: 2, minWidth: 0 }}>
                         {menu.map((m, k) => <option key={k} value={m.label}>{m.label}</option>)}
                       </select>
                       <input type="number" value={leg.months} onChange={e => updateLeg(o.id, i, { months: e.target.value })} title="months" style={{ ...inp, width: 52, flex: '0 0 52px' }} />
-                      <input type="number" step="0.01" value={leg.rate} onChange={e => updateLeg(o.id, i, { rate: e.target.value })} title="rate %" style={{ ...inp, width: 64, flex: '0 0 64px' }} />
-                      {o.legs.length > 1 && <button onClick={() => removeLeg(o.id, i)} style={{ ...btn, padding: '4px 7px', background: '#7f1d1d' }}>×</button>}
+                      <input type="number" step="0.01" value={leg._override ? leg.override : leg.rate}
+                        onChange={e => updateLeg(o.id, i, { override: e.target.value })}
+                        title={isRoll ? 'FRA-implied — type to override' : 'today\'s rate'}
+                        style={{ ...inp, width: 64, flex: '0 0 64px', color: leg._override ? '#fbbf24' : '#38bdf8' }} />
+                      {o.rlegs.length > 1 && <button onClick={() => removeLeg(o.id, i)} style={{ ...btn, padding: '4px 7px', background: '#7f1d1d' }}>×</button>}
                     </div>
-                    {showNote && (
+                    {isRoll && showAuto && (
                       <div style={{ fontSize: 10, color: '#64748b', margin: '0 0 6px 46px' }}>
-                        = {leg._spot.toFixed(2)}% + {(leg._move * 100).toFixed(0)}bps
-                        {leg._a0 != null && leg._aS != null ? ` · fwd ${leg.months}m FRA ${leg._a0.toFixed(2)}→${leg._aS.toFixed(2)}%` : ''}
+                        auto = {leg._spot.toFixed(2)}% + {(leg._move * 100).toFixed(0)}bps · fwd {leg.months}m FRA {leg._a0.toFixed(2)}→{leg._aS.toFixed(2)}%
+                      </div>
+                    )}
+                    {isRoll && leg._override && (
+                      <div style={{ fontSize: 10, color: '#fbbf24', margin: '0 0 6px 46px' }}>
+                        your rate · <button onClick={() => updateLeg(o.id, i, { override: undefined })}
+                          style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, fontSize: 10, textDecoration: 'underline' }}>↺ use FRA‑implied ({leg._computed.toFixed(2)}%)</button>
                       </div>
                     )}
                   </div>
@@ -330,7 +357,7 @@ export default function CashScenario({ latest, instruments, markers }) {
               })}
               <div style={{ marginTop: 4, marginBottom: 12 }}>
                 <button onClick={() => addLeg(o.id)} style={btn}>+ Add roll / leg</button>
-                <span style={{ fontSize: 10, color: '#475569', marginLeft: 8 }}>instrument · months · rate %</span>
+                <span style={{ fontSize: 10, color: '#475569', marginLeft: 8 }}>instrument · months · rate% (auto)</span>
               </div>
               <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
                 <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 10.5, wordBreak: 'break-word' }}>
