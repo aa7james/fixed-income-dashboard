@@ -99,7 +99,7 @@ export default function CashScenario({ latest, instruments, markers }) {
     const mk = (label, mLabel, months) => { const m = (markers || []).find(x => (x.label || '').toLowerCase() === mLabel.toLowerCase()); if (m) items.push({ label, rate: +Number(m.value).toFixed(3), months }); };
     mk('Call', 'Call', 1); mk('Money Market', 'MM', 1);
     [3, 6, 9, 12].forEach(t => push(`${t}m T-Bill`, `${t}m T-Bill`, t));
-    [3, 6, 9, 12].forEach(t => push(`${t}m Fixed NCD`, `${t}m Fixed Rate NCD`, t));
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(t => push(`${t}m Fixed NCD`, `${t}m Fixed Rate NCD`, t));
     [3, 6, 9, 12].forEach(t => push(`${t}m JIBAR`, `${t}m JIBAR`, t));
     // Variable NCDs: all-in = Zaronia + spread
     const on = latest?.['Zaronia'];
