@@ -7,10 +7,10 @@ import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
 
 const TENORS = [
-  { label: '3M', tbill: '3m T-Bill', ncd: '3m Fixed Rate NCD ASK' },
-  { label: '6M', tbill: '6m T-Bill', ncd: '6m Fixed Rate NCD ASK' },
-  { label: '9M', tbill: '9m T-Bill', ncd: '9m Fixed Rate NCD ASK' },
-  { label: '12M', tbill: '12m T-Bill', ncd: '12m Fixed Rate NCD ASK' },
+  { label: '3M', tbill: '3m T-Bill', ncd: '3m Fixed Rate NCD' },
+  { label: '6M', tbill: '6m T-Bill', ncd: '6m Fixed Rate NCD' },
+  { label: '9M', tbill: '9m T-Bill', ncd: '9m Fixed Rate NCD' },
+  { label: '12M', tbill: '12m T-Bill', ncd: '12m Fixed Rate NCD' },
 ];
 
 const COMPARISONS = [
