@@ -293,16 +293,22 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     return [0, Math.ceil(Math.max(...all)) + 1];
   }, [filteredSeries, activeRange]);
 
+  const [yMin, setYMin] = useState('');
+  const [yMax, setYMax] = useState('');
   const yDomain = useMemo(() => {
     const all = filteredSeries.flatMap(s => s.data.map(p => p.y));
     const markerVals = markers.map(m => Number(m.value)).filter(v => !isNaN(v));
     const combined = [...all, ...markerVals];
-    if (!combined.length) return [0, 15];
-    const lo = Math.min(...combined);
-    const hi = Math.max(...combined);
-    const pad = Math.max(0.1, (hi - lo) * 0.08); // hug the data, small breathing room
-    return [Math.max(0, +(lo - pad).toFixed(2)), +(hi + pad).toFixed(2)];
-  }, [filteredSeries, markers]);
+    let autoLo = 0, autoHi = 15;
+    if (combined.length) {
+      const lo = Math.min(...combined), hi = Math.max(...combined);
+      autoLo = Math.max(0, Math.floor((lo - 0.25) * 4) / 4); // round out to clean 0.25 gridlines
+      autoHi = Math.ceil((hi + 0.25) * 4) / 4;
+    }
+    const useLo = yMin !== '' && !isNaN(+yMin) ? +yMin : autoLo;
+    const useHi = yMax !== '' && !isNaN(+yMax) ? +yMax : autoHi;
+    return [useLo, useHi];
+  }, [filteredSeries, markers, yMin, yMax]);
 
   // Spread chart data — compare latest vs first comparison date
   const spreadData = useMemo(() => {
@@ -478,6 +484,19 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
       {filteredSeries.length > 0 ? (
         <div className={styles.chartWrap}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Y-axis (%):</span>
+            <input type="number" step="0.25" placeholder="min" value={yMin} onChange={e => setYMin(e.target.value)}
+              style={{ width: 72, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+            <span style={{ color: '#475569' }}>–</span>
+            <input type="number" step="0.25" placeholder="max" value={yMax} onChange={e => setYMax(e.target.value)}
+              style={{ width: 72, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+            <span style={{ fontSize: 11, color: '#64748b' }}>blank = auto</span>
+            {(yMin !== '' || yMax !== '') && (
+              <button onClick={() => { setYMin(''); setYMax(''); }}
+                style={{ fontSize: 11, padding: '3px 10px', borderRadius: 10, border: '1px solid #334155', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>Reset</button>
+            )}
+          </div>
           <ResponsiveContainer width="100%" height={600}>
             <ScatterChart margin={{ top: 16, right: 24, left: showCash && markers.length ? 96 : 0, bottom: 24 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
