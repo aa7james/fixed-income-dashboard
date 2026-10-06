@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceDot,
+  Tooltip, ReferenceDot,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
@@ -88,7 +89,7 @@ export default function InflationLinkedBonds() {
       </div>
 
       {yb.Control}
-      <ResponsiveContainer width="100%" height={380}>
+      <ResizableChart width="100%" height={380}>
         <ComposedChart data={rows} margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
 
@@ -171,7 +172,7 @@ export default function InflationLinkedBonds() {
             />
           ))}
         </ComposedChart>
-      </ResponsiveContainer>
+      </ResizableChart>
 
       <p className={styles.note}>
         Dots mark actual bond maturities. Cubic spline interpolation between knot points.

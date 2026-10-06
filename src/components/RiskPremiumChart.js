@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
@@ -97,7 +98,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
         Stacked — total premium
       </p>
       {yb.Control}
-      <ResponsiveContainer width="100%" height={300}>
+      <ResizableChart width="100%" height={300}>
         <BarChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }} barCategoryGap={0}>
           <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
           <XAxis
@@ -123,12 +124,12 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
           <Bar dataKey="credit"   name="Credit risk"   stackId="a" fill={CREDIT_COLOR} />
           <Bar dataKey="currency" name="Currency risk" stackId="a" fill={CURRENCY_COLOR} />
         </BarChart>
-      </ResponsiveContainer>
+      </ResizableChart>
 
       <p style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: '16px 0 4px' }}>
         Lines — each component
       </p>
-      <ResponsiveContainer width="100%" height={280}>
+      <ResizableChart width="100%" height={280}>
         <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
           <XAxis
@@ -154,7 +155,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
           <Line type="monotone" dataKey="currency" name="Currency risk" stroke={CURRENCY_COLOR} strokeWidth={1.5} dot={false} connectNulls={true} />
           <Line type="monotone" dataKey="credit"   name="Credit risk"   stroke={CREDIT_COLOR}   strokeWidth={1.5} dot={false} connectNulls={true} />
         </LineChart>
-      </ResponsiveContainer>
+      </ResizableChart>
     </div>
   );
 }

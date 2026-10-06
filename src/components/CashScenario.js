@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import { useYAxisBounds } from './useYAxisBounds';
 
 // User-built cash scenario comparator: add as many options as you like, each
@@ -434,7 +435,7 @@ export default function CashScenario({ latest, instruments, markers }) {
             ))}
           </div>
           {yb.Control}
-          <ResponsiveContainer width="100%" height={640}>
+          <ResizableChart width="100%" height={640}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
@@ -457,7 +458,7 @@ export default function CashScenario({ latest, instruments, markers }) {
                 );
               })}
             </LineChart>
-          </ResponsiveContainer>
+          </ResizableChart>
         </div>
       )}
 

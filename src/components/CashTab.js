@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import CashScenario from './CashScenario';
 import VariableNcdSchedule from './VariableNcdSchedule';
 import { useYAxisBounds } from './useYAxisBounds';
@@ -347,7 +348,7 @@ export default function CashTab({ data, instruments }) {
             Zaronia forward curve (FRAs) — the market's expected path of the short rate.
           </p>
           {yb.Control}
-          <ResponsiveContainer width="100%" height={340}>
+          <ResizableChart width="100%" height={340}>
             <LineChart data={fraPath} margin={{ top: 16, right: 40, left: 0, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
               <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={50} />
@@ -357,7 +358,7 @@ export default function CashTab({ data, instruments }) {
                 <LabelList dataKey="rate" position="top" style={{ fill: '#38bdf8', fontSize: 9 }} formatter={v => `${v}%`} />
               </Line>
             </LineChart>
-          </ResponsiveContainer>
+          </ResizableChart>
           {fraRead && (
             <p style={{ fontSize: 13, color: '#cbd5e1', margin: '10px 4px 0', lineHeight: 1.5 }}>
               <strong style={{ color: fraRead.dir === 'down' ? '#4ade80' : fraRead.dir === 'up' ? '#f87171' : '#94a3b8' }}>
@@ -373,7 +374,7 @@ export default function CashTab({ data, instruments }) {
               <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#64748b', margin: '20px 0 8px' }}>
                 Cumulative increase from base
               </p>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResizableChart width="100%" height={220}>
                 <BarChart data={fraIncrease} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis
@@ -388,7 +389,7 @@ export default function CashTab({ data, instruments }) {
                     <LabelList dataKey="incr" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </ResizableChart>
             </>
           )}
         </div>

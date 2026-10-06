@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, LabelList,
+  Tooltip, Legend, LabelList,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import { supabase } from '../utils/supabase';
 import styles from './ChartBuilder.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
@@ -291,7 +292,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
           ) : (
             <div className={styles.chart}>
               {yb.Control}
-              <ResponsiveContainer width="100%" height={380}>
+              <ResizableChart width="100%" height={380}>
                 <LineChart data={chartData} margin={{ top: 10, right: 55, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis
@@ -351,7 +352,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                     );
                   })}
                 </LineChart>
-              </ResponsiveContainer>
+              </ResizableChart>
             </div>
           )}
 

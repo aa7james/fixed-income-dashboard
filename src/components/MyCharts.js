@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, LabelList,
+  Tooltip, Legend, LabelList,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import { supabase } from '../utils/supabase';
 import AddToPackButton from './AddToPackButton';
 import TBillPremiumChart from './TBillPremiumChart';
@@ -83,7 +84,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
   return (
     <>
     {yb.Control}
-    <ResponsiveContainer width="100%" height={height}>
+    <ResizableChart width="100%" height={height}>
       <LineChart data={chartData} margin={{ top: 8, right: 55, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
         <XAxis
@@ -156,7 +157,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
           );
         })}
       </LineChart>
-    </ResponsiveContainer>
+    </ResizableChart>
     </>
   );
 }

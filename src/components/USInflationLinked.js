@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import styles from './InflationLinkedBonds.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
 
@@ -85,7 +86,7 @@ export default function USInflationLinked({ data }) {
       </div>
 
       {yb.Control}
-      <ResponsiveContainer width="100%" height={360}>
+      <ResizableChart width="100%" height={360}>
         <ComposedChart data={points} margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
@@ -112,7 +113,7 @@ export default function USInflationLinked({ data }) {
           <Line type="monotone" dataKey="real" name="Real" stroke="#2dd4bf"
             strokeWidth={2} dot={{ r: 3, fill: '#2dd4bf' }} isAnimationActive={false} connectNulls />
         </ComposedChart>
-      </ResponsiveContainer>
+      </ResizableChart>
 
       <p className={styles.note}>
         Implied inflation (breakeven) = nominal Treasury yield − TIPS real yield, per tenor.

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import ResizableChart from './ResizableChart';
 import { useYAxisBounds } from './useYAxisBounds';
 
 // Month-by-month accrual for a Zaronia-linked variable NCD. Each month the coupon
@@ -103,7 +104,7 @@ export default function VariableNcdSchedule({ latest, instruments }) {
 
       {/* monthly yield chart */}
       {yb.Control}
-      <ResponsiveContainer width="100%" height={240}>
+      <ResizableChart width="100%" height={240}>
         <BarChart data={schedule} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
           <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `M${m}`} interval={0} />
@@ -111,7 +112,7 @@ export default function VariableNcdSchedule({ latest, instruments }) {
           <Tooltip content={<SchedTip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
           <Bar dataKey="yield" fill="#38bdf8" radius={[3, 3, 0, 0]} maxBarSize={38} />
         </BarChart>
-      </ResponsiveContainer>
+      </ResizableChart>
 
       {/* monthly table */}
       <div style={{ maxHeight: 300, overflowY: 'auto', marginTop: 12 }}>

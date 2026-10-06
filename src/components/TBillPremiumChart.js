@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
@@ -79,7 +80,7 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
         )}
       </div>
       {yb.Control}
-      <ResponsiveContainer width="100%" height={320}>
+      <ResizableChart width="100%" height={320}>
         <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
           <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} />
@@ -110,7 +111,7 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
             />
           ))}
         </LineChart>
-      </ResponsiveContainer>
+      </ResizableChart>
     </div>
   );
 }

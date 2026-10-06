@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import AddToPackButton from './AddToPackButton';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LabelList, Legend,
+  Tooltip, LabelList, Legend,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import styles from './MarketPricing.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
 
@@ -146,7 +147,7 @@ function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, is
       {/* Line chart — rate level, X-axis spaced by actual end month */}
       <p className={styles.subLabel}>FRA Curve</p>
       {yb.Control}
-      <ResponsiveContainer width="100%" height={360}>
+      <ResizableChart width="100%" height={360}>
         <ComposedChart data={chartData} margin={{ top: 16, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
@@ -197,11 +198,11 @@ function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, is
             />
           )}
         </ComposedChart>
-      </ResponsiveContainer>
+      </ResizableChart>
 
       {/* Bar chart — cumulative increase from base */}
       <p className={styles.subLabel}>Cumulative Increase from Base</p>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResizableChart width="100%" height={260}>
         <ComposedChart data={barData} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
@@ -232,7 +233,7 @@ function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, is
           </Bar>
           {hasComp && <Bar dataKey="cumComp" name={compLabel || 'Comparison'} fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={16} />}
         </ComposedChart>
-      </ResponsiveContainer>
+      </ResizableChart>
     </div>
   );
 }

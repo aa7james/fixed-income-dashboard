@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend,
   BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts';
+import ResizableChart from './ResizableChart';
 import styles from './YieldCurve.module.css';
 import { useYAxisBounds } from './useYAxisBounds';
 
@@ -220,7 +221,7 @@ export default function USYieldCurve({ data }) {
 
       <div className={styles.chartWrap}>
         {yb.Control}
-        <ResponsiveContainer width="100%" height={560}>
+        <ResizableChart width="100%" height={560}>
           <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 24 }}>
             <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
             <XAxis
@@ -255,7 +256,7 @@ export default function USYieldCurve({ data }) {
               />
             ))}
           </ScatterChart>
-        </ResponsiveContainer>
+        </ResizableChart>
       </div>
 
       {/* Spread bar chart — matches the SA yield curve */}
@@ -267,7 +268,7 @@ export default function USYieldCurve({ data }) {
               positive = yields rose · negative = yields fell
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResizableChart width="100%" height={240}>
             <BarChart data={filteredSpread} margin={{ top: 8, right: 24, left: 0, bottom: 48 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
               <XAxis
@@ -291,7 +292,7 @@ export default function USYieldCurve({ data }) {
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+          </ResizableChart>
         </div>
       )}
     </div>
