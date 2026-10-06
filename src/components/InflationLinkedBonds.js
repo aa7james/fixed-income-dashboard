@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
@@ -38,6 +39,7 @@ export default function InflationLinkedBonds() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const yb = useYAxisBounds();
 
   useEffect(() => {
     loadYieldCurveInterpolated()
@@ -85,6 +87,7 @@ export default function InflationLinkedBonds() {
         </div>
       </div>
 
+      {yb.Control}
       <ResponsiveContainer width="100%" height={380}>
         <ComposedChart data={rows} margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -100,7 +103,8 @@ export default function InflationLinkedBonds() {
           />
 
           <YAxis
-            domain={[0, 'auto']}
+            domain={[yb.yMin !== '' ? +yb.yMin : 0, yb.yMax !== '' ? +yb.yMax : 'auto']}
+            allowDataOverflow
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={52}

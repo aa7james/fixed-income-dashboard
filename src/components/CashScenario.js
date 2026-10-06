@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { useYAxisBounds } from './useYAxisBounds';
 
 // User-built cash scenario comparator: add as many options as you like, each
 // built from one or more legs (a "roll" is just an extra leg with the rate you
@@ -302,6 +303,7 @@ export default function CashScenario({ latest, instruments, markers }) {
     return new Set(sel.map(r => r.id));
   }, [eligible, filterMode, topN, minYield]);
   const isManual = (id) => !String(id).startsWith('gen_');
+  const yb = useYAxisBounds();
 
   // custom instrument form
   const [cName, setCName] = useState(''); const [cRate, setCRate] = useState(''); const [cMonths, setCMonths] = useState('');
@@ -431,11 +433,12 @@ export default function CashScenario({ latest, instruments, markers }) {
                 style={{ ...btn, background: maxTenor === v ? '#0ea5e9' : '#1e293b', color: maxTenor === v ? '#fff' : '#94a3b8', fontWeight: maxTenor === v ? 700 : 400 }}>{lbl}</button>
             ))}
           </div>
+          {yb.Control}
           <ResponsiveContainer width="100%" height={640}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
-              <YAxis domain={['dataMin', 'dataMax']} tick={{ fill: '#64748b', fontSize: 10 }} width={64}
+              <YAxis domain={[yb.yMin !== '' ? +yb.yMin : 'dataMin', yb.yMax !== '' ? +yb.yMax : 'dataMax']} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={64}
                 allowDecimals={false} tickFormatter={v => `R${(v / 1000).toFixed(1)}k`} />
               <Tooltip content={renderTip} />
               {options.map((o, i) => {

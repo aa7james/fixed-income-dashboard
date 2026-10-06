@@ -5,6 +5,7 @@ import {
   BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts';
 import styles from './YieldCurve.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 // US on-the-run benchmarks (constant-maturity generics), plotted at NOMINAL
 // tenor. Bills + notes merged into one curve. 2M/4M omitted (no generic).
@@ -105,6 +106,7 @@ function buildCurve(row) {
 }
 
 export default function USYieldCurve({ data }) {
+  const yb = useYAxisBounds();
   const [selectedPresets, setSelectedPresets] = useState([]);
   const [tenorRange, setTenorRange] = useState('Full Curve');
   const dataRows = useMemo(() => data?.dataRows || [], [data]);
@@ -160,9 +162,11 @@ export default function USYieldCurve({ data }) {
 
   const xMax = activeMax || Math.ceil(Math.max(...allPts.map(p => p.x))) + 1;
   const yVals = allPts.map(p => p.y);
+  const autoLo = Math.max(0, Math.floor((Math.min(...yVals) - 0.25) * 4) / 4);
+  const autoHi = Math.ceil((Math.max(...yVals) + 0.25) * 4) / 4;
   const yDomain = [
-    Math.max(0, Math.floor(Math.min(...yVals) * 2) / 2 - 0.5),
-    Math.ceil(Math.max(...yVals) * 2) / 2 + 0.5,
+    yb.yMin !== '' ? +yb.yMin : autoLo,
+    yb.yMax !== '' ? +yb.yMax : autoHi,
   ];
 
   const togglePreset = (label) =>
@@ -215,7 +219,8 @@ export default function USYieldCurve({ data }) {
       </div>
 
       <div className={styles.chartWrap}>
-        <ResponsiveContainer width="100%" height={440}>
+        {yb.Control}
+        <ResponsiveContainer width="100%" height={560}>
           <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 24 }}>
             <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
             <XAxis

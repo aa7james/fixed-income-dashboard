@@ -5,6 +5,7 @@ import {
   Tooltip, ResponsiveContainer, LabelList, Legend,
 } from 'recharts';
 import styles from './MarketPricing.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 // Parse "NxM" or "N×M" — returns end month for X-axis positioning
 function tenorEndMonth(name) {
@@ -86,6 +87,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, isInPack, onTogglePack }) {
+  const yb = useYAxisBounds();
   if (!data.length) return null;
 
   // Overlay a comparison-date curve on the same axes (merge by month).
@@ -143,6 +145,7 @@ function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, is
 
       {/* Line chart — rate level, X-axis spaced by actual end month */}
       <p className={styles.subLabel}>FRA Curve</p>
+      {yb.Control}
       <ResponsiveContainer width="100%" height={360}>
         <ComposedChart data={chartData} margin={{ top: 16, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -159,7 +162,8 @@ function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, is
             interval={0}
           />
           <YAxis
-            domain={['auto', 'auto']}
+            domain={yb.domain}
+            allowDataOverflow
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={50}

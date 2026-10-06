@@ -6,6 +6,7 @@ import {
 import { supabase } from '../utils/supabase';
 import AddToPackButton from './AddToPackButton';
 import TBillPremiumChart from './TBillPremiumChart';
+import { useYAxisBounds } from './useYAxisBounds';
 import RiskPremiumChart from './RiskPremiumChart';
 import styles from './MyCharts.module.css';
 
@@ -77,8 +78,11 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
     [data.dataRows, chart.series, period, customFrom, customTo]
   );
   const isHidden = (key) => hiddenKeys && hiddenKeys.has(key);
+  const yb = useYAxisBounds();
 
   return (
+    <>
+    {yb.Control}
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData} margin={{ top: 8, right: 55, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
@@ -95,7 +99,8 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
           yAxisId="left"
           tick={{ fill: '#64748b', fontSize: 10 }}
           width={52}
-          domain={['auto', 'auto']}
+          domain={yb.domain}
+          allowDataOverflow
           tickFormatter={v => v}
         />
         {chart.series.some(s => s.axis === 'right' && !isHidden(s.key)) && (
@@ -152,6 +157,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
         })}
       </LineChart>
     </ResponsiveContainer>
+    </>
   );
 }
 

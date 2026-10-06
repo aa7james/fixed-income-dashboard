@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { supabase } from '../utils/supabase';
 import styles from './ChartBuilder.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', '10Y', 'ALL', 'Custom'];
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
@@ -132,6 +133,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
     buildChartData(data.dataRows, series, period, customFrom, customTo),
     [data.dataRows, series, period, customFrom, customTo]
   );
+  const yb = useYAxisBounds();
 
   const saveChart = async () => {
     if (!chartName.trim() || !series.length) {
@@ -288,6 +290,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
             <div className={styles.empty}>Add a series on the left to preview your chart</div>
           ) : (
             <div className={styles.chart}>
+              {yb.Control}
               <ResponsiveContainer width="100%" height={380}>
                 <LineChart data={chartData} margin={{ top: 10, right: 55, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -304,7 +307,8 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                     yAxisId="left"
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     tickFormatter={v => `${v}`}
-                    domain={['auto', 'auto']}
+                    domain={yb.domain}
+                    allowDataOverflow
                     width={52}
                   />
                   {series.some(s => s.axis === 'right') && (

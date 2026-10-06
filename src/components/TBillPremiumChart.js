@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 const TENORS = [
   { label: '3M', tbill: '3m T-Bill', ncd: '3m Fixed Rate NCD' },
@@ -59,6 +60,7 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
   }, [dataRows, latest]);
 
   const hasAnyData = chartData.some(p => COMPARISONS.some(c => p[c.key] != null));
+  const yb = useYAxisBounds();
   if (!hasAnyData) return null;
 
   return (
@@ -76,11 +78,14 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
           <AddToPackButton isInPack={isInPack} onToggle={() => onTogglePack('tbill-premium')} />
         )}
       </div>
+      {yb.Control}
       <ResponsiveContainer width="100%" height={320}>
         <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
           <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} />
           <YAxis
+            domain={yb.domain}
+            allowDataOverflow
             tickFormatter={v => `${v.toFixed(2)}%`}
             tick={{ fill: '#94a3b8', fontSize: 11 }}
             width={56}

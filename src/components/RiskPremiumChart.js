@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 const SA   = 'SA Generic 10 year';
 const US   = 'US Generic 10 year';
@@ -58,6 +59,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
   }, [dataRows, period]);
 
   const hasAnyData = chartData.some(p => p.currency != null || p.credit != null);
+  const yb = useYAxisBounds();
   if (!hasAnyData) return null;
 
   return (
@@ -94,6 +96,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
       <p style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 4px' }}>
         Stacked — total premium
       </p>
+      {yb.Control}
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }} barCategoryGap={0}>
           <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
@@ -108,6 +111,8 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
             }}
           />
           <YAxis
+            domain={yb.domain}
+            allowDataOverflow
             tickFormatter={v => `${v}`}
             tick={{ fill: '#94a3b8', fontSize: 11 }}
             width={48}
@@ -137,6 +142,8 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
             }}
           />
           <YAxis
+            domain={yb.domain}
+            allowDataOverflow
             tickFormatter={v => `${v}`}
             tick={{ fill: '#94a3b8', fontSize: 11 }}
             width={48}

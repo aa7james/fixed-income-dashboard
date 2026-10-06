@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useYAxisBounds } from './useYAxisBounds';
 
 // Month-by-month accrual for a Zaronia-linked variable NCD. Each month the coupon
 // resets to (forward Zaronia for that month + fixed spread); interest accrues at
@@ -84,6 +85,7 @@ export default function VariableNcdSchedule({ latest, instruments }) {
   const gap = fixedRate != null ? Math.round((fixedRate - avgYield) * 100) : null;    // nominal rate view
   const effGap = fixedRate != null ? Math.round((effective - fixedRate) * 100) : null; // realized-return view
 
+  const yb = useYAxisBounds();
   if (!latest || !blocks.length) return null;
 
   return (
@@ -100,11 +102,12 @@ export default function VariableNcdSchedule({ latest, instruments }) {
       </div>
 
       {/* monthly yield chart */}
-      <ResponsiveContainer width="100%" height={180}>
+      {yb.Control}
+      <ResponsiveContainer width="100%" height={240}>
         <BarChart data={schedule} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
           <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `M${m}`} interval={0} />
-          <YAxis domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={48} />
+          <YAxis domain={yb.domain} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={48} />
           <Tooltip content={<SchedTip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
           <Bar dataKey="yield" fill="#38bdf8" radius={[3, 3, 0, 0]} maxBarSize={38} />
         </BarChart>

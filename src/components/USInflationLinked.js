@@ -4,6 +4,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import styles from './InflationLinkedBonds.module.css';
+import { useYAxisBounds } from './useYAxisBounds';
 
 // TIPS real-yield tenors paired with their nominal Treasury counterpart.
 const TIPS_TENORS = [
@@ -63,6 +64,7 @@ export default function USInflationLinked({ data }) {
   }, [latest]);
 
   const hasData = points.some(p => p.real != null);
+  const yb = useYAxisBounds();
   if (!hasData) return null;
 
   return (
@@ -82,6 +84,7 @@ export default function USInflationLinked({ data }) {
         </div>
       </div>
 
+      {yb.Control}
       <ResponsiveContainer width="100%" height={360}>
         <ComposedChart data={points} margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -95,7 +98,8 @@ export default function USInflationLinked({ data }) {
             label={{ value: 'Tenor', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
           />
           <YAxis
-            domain={[0, 'auto']}
+            domain={[yb.yMin !== '' ? +yb.yMin : 0, yb.yMax !== '' ? +yb.yMax : 'auto']}
+            allowDataOverflow
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}
             width={52}
