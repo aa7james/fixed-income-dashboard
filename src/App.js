@@ -13,13 +13,13 @@ import InstrumentsAdmin from './components/InstrumentsAdmin';
 import CashTab from './components/CashTab';
 import styles from './App.module.css';
 
-const TABS = ['Latest Rates', 'Cash', 'Market Pricing', 'Yield Curve', 'Chart Builder', 'My Charts', 'Investment Pack', 'Instruments'];
+const TABS = ['Yield Curve', 'Cash', 'Market Pricing', 'Chart Builder', 'My Charts', 'Investment Pack', 'Instruments', 'Latest Rates'];
 
 export default function App() {
   const [data, setData] = useState(null);
   const [groups, setGroups] = useState({});
   const [instruments, setInstruments] = useState([]);
-  const [activeTab, setActiveTab] = useState('Latest Rates');
+  const [activeTab, setActiveTab] = useState('Yield Curve');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Connecting to database…');

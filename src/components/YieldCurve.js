@@ -298,9 +298,10 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     const markerVals = markers.map(m => Number(m.value)).filter(v => !isNaN(v));
     const combined = [...all, ...markerVals];
     if (!combined.length) return [0, 15];
-    const min = Math.floor(Math.min(...combined) * 2) / 2;
-    const max = Math.ceil(Math.max(...combined) * 2) / 2;
-    return [Math.max(0, min - 0.5), max + 0.5];
+    const lo = Math.min(...combined);
+    const hi = Math.max(...combined);
+    const pad = Math.max(0.1, (hi - lo) * 0.08); // hug the data, small breathing room
+    return [Math.max(0, +(lo - pad).toFixed(2)), +(hi + pad).toFixed(2)];
   }, [filteredSeries, markers]);
 
   // Spread chart data — compare latest vs first comparison date
@@ -477,7 +478,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
       {filteredSeries.length > 0 ? (
         <div className={styles.chartWrap}>
-          <ResponsiveContainer width="100%" height={440}>
+          <ResponsiveContainer width="100%" height={600}>
             <ScatterChart margin={{ top: 16, right: 24, left: showCash && markers.length ? 96 : 0, bottom: 24 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
               <XAxis

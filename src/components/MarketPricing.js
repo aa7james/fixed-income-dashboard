@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import AddToPackButton from './AddToPackButton';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LabelList,
+  Tooltip, ResponsiveContainer, LabelList, Legend,
 } from 'recharts';
 import styles from './MarketPricing.module.css';
 
@@ -85,10 +85,20 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function FraCurveChart({ title, subtitle, data, packKey, isInPack, onTogglePack }) {
+function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, isInPack, onTogglePack }) {
   if (!data.length) return null;
 
-  const barData = data.slice(1); // exclude base from bar chart
+  // Overlay a comparison-date curve on the same axes (merge by month).
+  const hasComp = compData && compData.length > 0;
+  const compByMonth = {};
+  if (hasComp) compData.forEach(d => { compByMonth[d.month] = d; });
+  const merged = data.map(d => ({
+    ...d,
+    rateComp: hasComp ? (compByMonth[d.month]?.rate ?? null) : undefined,
+    cumComp: hasComp ? (compByMonth[d.month]?.cumulative ?? null) : undefined,
+  }));
+  const chartData = hasComp ? merged : data;
+  const barData = chartData.slice(1); // exclude base from bar chart
 
   return (
     <div className={styles.chartCard}>
@@ -117,6 +127,12 @@ function FraCurveChart({ title, subtitle, data, packKey, isInPack, onTogglePack 
               <td>Rate</td>
               {data.map(d => <td key={d.label}>{d.rate ?? '—'}</td>)}
             </tr>
+            {hasComp && (
+              <tr>
+                <td>{compLabel || 'Comparison'}</td>
+                {data.map(d => <td key={d.label}>{compByMonth[d.month]?.rate ?? '—'}</td>)}
+              </tr>
+            )}
             <tr>
               <td>Cum. Increase</td>
               {data.map(d => <td key={d.label}>{d.cumulative != null ? d.cumulative : '—'}</td>)}
@@ -127,16 +143,16 @@ function FraCurveChart({ title, subtitle, data, packKey, isInPack, onTogglePack 
 
       {/* Line chart — rate level, X-axis spaced by actual end month */}
       <p className={styles.subLabel}>FRA Curve</p>
-      <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={data} margin={{ top: 16, right: 20, left: 0, bottom: 10 }}>
+      <ResponsiveContainer width="100%" height={360}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
             dataKey="month"
             type="number"
             domain={[0, 'dataMax']}
-            ticks={data.map(d => d.month)}
+            ticks={chartData.map(d => d.month)}
             tickFormatter={m => {
-              const pt = data.find(d => d.month === m);
+              const pt = chartData.find(d => d.month === m);
               return pt ? pt.label : m;
             }}
             tick={{ fill: '#64748b', fontSize: 9 }}
@@ -149,26 +165,39 @@ function FraCurveChart({ title, subtitle, data, packKey, isInPack, onTogglePack 
             width={50}
           />
           <Tooltip
-            labelFormatter={m => { const pt = data.find(d => d.month === m); return pt ? pt.label : m; }}
+            labelFormatter={m => { const pt = chartData.find(d => d.month === m); return pt ? pt.label : m; }}
             content={<CustomTooltip />}
           />
+          {hasComp && <Legend wrapperStyle={{ fontSize: 11 }} />}
           <Line
             type="monotone"
             dataKey="rate"
-            name="Rate"
+            name={hasComp ? 'Current' : 'Rate'}
             stroke="#38bdf8"
             strokeWidth={2}
             dot={{ r: 4, fill: '#38bdf8' }}
             connectNulls={true}
           >
-            <LabelList dataKey="rate" position="top" style={{ fill: '#38bdf8', fontSize: 10 }} formatter={v => `${v}%`} />
+            {!hasComp && <LabelList dataKey="rate" position="top" style={{ fill: '#38bdf8', fontSize: 10 }} formatter={v => `${v}%`} />}
           </Line>
+          {hasComp && (
+            <Line
+              type="monotone"
+              dataKey="rateComp"
+              name={compLabel || 'Comparison'}
+              stroke="#f59e0b"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={{ r: 3, fill: '#f59e0b' }}
+              connectNulls={true}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
 
       {/* Bar chart — cumulative increase from base */}
       <p className={styles.subLabel}>Cumulative Increase from Base</p>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={260}>
         <ComposedChart data={barData} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis
@@ -193,9 +222,11 @@ function FraCurveChart({ title, subtitle, data, packKey, isInPack, onTogglePack 
             labelFormatter={m => { const pt = barData.find(d => d.month === m); return pt ? pt.label : m; }}
             content={<CustomTooltip />}
           />
-          <Bar dataKey="cumulative" name="Cum. Increase" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={28}>
-            <LabelList dataKey="cumulative" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
+          {hasComp && <Legend wrapperStyle={{ fontSize: 11 }} />}
+          <Bar dataKey="cumulative" name={hasComp ? 'Current' : 'Cum. Increase'} fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={hasComp ? 16 : 28}>
+            {!hasComp && <LabelList dataKey="cumulative" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />}
           </Bar>
+          {hasComp && <Bar dataKey="cumComp" name={compLabel || 'Comparison'} fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={16} />}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -279,6 +310,8 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
           <FraCurveChart
             title="Zaronia FRA Curve"
             data={zaroniaData}
+            compData={!packMode && comparisonRow ? zaroniaCompData : null}
+            compLabel={comparisonDateStr}
             packKey="zaronia-fra"
             isInPack={isInPack?.('zaronia-fra')}
             onTogglePack={packMode ? null : onTogglePack}
@@ -288,6 +321,8 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
           <FraCurveChart
             title="SOFR FRA Curve"
             data={sofrData}
+            compData={!packMode && comparisonRow ? sofrCompData : null}
+            compLabel={comparisonDateStr}
             packKey="sofr-fra"
             isInPack={isInPack?.('sofr-fra')}
             onTogglePack={packMode ? null : onTogglePack}
@@ -343,22 +378,9 @@ export default function MarketPricing({ data, instruments, onTogglePack, isInPac
           </div>
 
           {comparisonRow && (
-            <div className={styles.grid}>
-              {zaroniaCompData.length > 0 && (
-                <FraCurveChart
-                  title="Zaronia FRA Curve"
-                  subtitle={`as at ${comparisonDateStr}`}
-                  data={zaroniaCompData}
-                />
-              )}
-              {sofrCompData.length > 0 && (
-                <FraCurveChart
-                  title="SOFR FRA Curve"
-                  subtitle={`as at ${comparisonDateStr}`}
-                  data={sofrCompData}
-                />
-              )}
-            </div>
+            <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+              Comparing against <strong style={{ color: '#f59e0b' }}>{comparisonDateStr}</strong> — shown as the dashed amber line on each curve above.
+            </p>
           )}
         </>
       )}
