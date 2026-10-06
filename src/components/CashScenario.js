@@ -88,7 +88,13 @@ function instrumentVectors(n) {
 let uid = 1;
 const nid = () => `o${Date.now()}_${uid++}`;
 
-export default function CashScenario({ latest, instruments, markers }) {
+export default function CashScenario({ latest, instruments, markers, fraOverrides = {} }) {
+  const fraEff = (name) => {
+    const o = fraOverrides[name];
+    if (o != null && o !== '') return Number(o);
+    const v = latest?.[name];
+    return v == null ? null : Number(v);
+  };
   const [custom, setCustom] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
   });
@@ -128,13 +134,14 @@ export default function CashScenario({ latest, instruments, markers }) {
   const fwdBlocks = useMemo(() => {
     if (!latest || !instruments?.length) return [];
     const b = [];
-    if (latest['Zaronia'] != null) b.push({ start: 0, end: 1, rate: Number(latest['Zaronia']) });
+    const on = fraEff('Zaronia');
+    if (on != null) b.push({ start: 0, end: 1, rate: on });
     instruments.filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia')).forEach(f => {
-      const m = f.name.match(/(\d+)[Xx×](\d+)/); const v = latest[f.name];
-      if (m && v != null) b.push({ start: +m[1], end: +m[2], rate: Number(v) });
+      const m = f.name.match(/(\d+)[Xx×](\d+)/); const v = fraEff(f.name);
+      if (m && v != null) b.push({ start: +m[1], end: +m[2], rate: v });
     });
     return b.sort((x, y) => x.start - y.start);
-  }, [latest, instruments]);
+  }, [latest, instruments, fraOverrides]); // eslint-disable-line
   const avgFwd = (a, b) => avgOverBlocks(fwdBlocks, a, b);
 
   // Resolve each leg's rate: today's spot for that instrument + the FRA-implied

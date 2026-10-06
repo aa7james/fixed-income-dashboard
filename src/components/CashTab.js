@@ -78,6 +78,17 @@ export default function CashTab({ data, instruments }) {
 
   const callRate = markerVal('Call'); // benchmark for "pickup vs call"
 
+  // Editable FRA curve: user overrides (keyed by instrument name / 'Zaronia').
+  // These flow through the forward curve AND the comparator's roll assumptions.
+  const [fraOverrides, setFraOverrides] = useState({});
+  const fraEff = (name) => {
+    const o = fraOverrides[name];
+    if (o != null && o !== '') return Number(o);
+    const v = latest?.[name];
+    return v == null ? null : Number(v);
+  };
+  const fraDirty = Object.values(fraOverrides).some(v => v != null && v !== '');
+
   // Best payer per tenor column
   const bestByCol = useMemo(() => {
     const best = {};
@@ -107,34 +118,46 @@ export default function CashTab({ data, instruments }) {
   // What the market is pricing: Zaronia forward (FRA) curve
   const fraPath = useMemo(() => {
     if (!latest || !instruments?.length) return [];
-    const base = latest['Zaronia'];
+    const base = fraEff('Zaronia');
     const fras = instruments.filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia'));
     const pts = [];
-    if (base != null) pts.push({ month: 0, label: 'Zaronia o/n', rate: +Number(base).toFixed(2) });
+    if (base != null) pts.push({ month: 0, label: 'Zaronia o/n', rate: +base.toFixed(2) });
     fras.forEach(f => {
-      const v = latest[f.name];
+      const v = fraEff(f.name);
       if (v == null) return;
-      pts.push({ month: tenorEndMonth(f.name), label: (f.display_label || f.name), rate: +Number(v).toFixed(2) });
+      pts.push({ month: tenorEndMonth(f.name), label: (f.display_label || f.name), rate: +v.toFixed(2) });
     });
     pts.sort((a, b) => a.month - b.month);
     return pts;
-  }, [latest, instruments]);
+  }, [latest, instruments, fraOverrides]); // eslint-disable-line
 
   // Cumulative increase from base: each forward rate minus today's Zaronia (in %).
   const fraIncrease = useMemo(() => {
     if (!latest || !instruments?.length) return [];
-    const base = latest['Zaronia'];
+    const base = fraEff('Zaronia');
     if (base == null) return [];
     return instruments
       .filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia'))
       .map(f => {
-        const v = latest[f.name];
+        const v = fraEff(f.name);
         const m = f.name.match(/(\d+)[Xx×](\d+)/);
         if (v == null || !m) return null;
-        return { label: `${m[1]}x${m[2]}`, month: +m[2], incr: +(Number(v) - Number(base)).toFixed(2) };
+        return { label: `${m[1]}x${m[2]}`, month: +m[2], incr: +(v - base).toFixed(2) };
       })
       .filter(Boolean)
       .sort((a, b) => a.month - b.month);
+  }, [latest, instruments, fraOverrides]); // eslint-disable-line
+
+  // FRA points for the editable inputs (base + each Zaronia FRA), sorted by tenor.
+  const fraEditable = useMemo(() => {
+    if (!latest || !instruments?.length) return [];
+    const list = [];
+    if (latest['Zaronia'] != null) list.push({ name: 'Zaronia', label: 'o/n', month: 0 });
+    instruments.filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia')).forEach(f => {
+      const m = f.name.match(/(\d+)[Xx×](\d+)/);
+      if (m && latest[f.name] != null) list.push({ name: f.name, label: `${m[1]}x${m[2]}`, month: +m[2] });
+    });
+    return list.sort((a, b) => a.month - b.month);
   }, [latest, instruments]);
 
   const fraRead = useMemo(() => {
@@ -150,14 +173,15 @@ export default function CashTab({ data, instruments }) {
   const fwdBlocks = useMemo(() => {
     if (!latest || !instruments?.length) return [];
     const blocks = [];
-    if (latest['Zaronia'] != null) blocks.push({ start: 0, end: 1, rate: Number(latest['Zaronia']) });
+    const on = fraEff('Zaronia');
+    if (on != null) blocks.push({ start: 0, end: 1, rate: on });
     instruments.filter(i => i.category === 'FRAs' && i.name.toLowerCase().includes('zaronia')).forEach(f => {
       const m = f.name.match(/(\d+)[Xx×](\d+)/);
-      const v = latest[f.name];
-      if (m && v != null) blocks.push({ start: +m[1], end: +m[2], rate: Number(v) });
+      const v = fraEff(f.name);
+      if (m && v != null) blocks.push({ start: +m[1], end: +m[2], rate: v });
     });
     return blocks.sort((a, b) => a.start - b.start);
-  }, [latest, instruments]);
+  }, [latest, instruments, fraOverrides]); // eslint-disable-line
 
   const maxFwdMonth = fwdBlocks.length ? fwdBlocks[fwdBlocks.length - 1].end : 0;
 
@@ -211,6 +235,87 @@ export default function CashTab({ data, instruments }) {
           What's on offer vs. what the market is pricing · as at {latest.dateStr}
         </p>
       </div>
+
+      {/* TOP — what the market is pricing (editable Zaronia forward curve) */}
+      {fraPath.length > 1 && (
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>What the market is pricing in</h3>
+          <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>
+            Zaronia forward curve (FRAs). <strong style={{ color: '#fbbf24' }}>Edit any rate below</strong> to stress-test — it reprices the whole curve AND every roll assumption in the comparator. Reset to return to the live market curve.
+          </p>
+
+          {/* Editable FRA inputs */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {fraEditable.map(p => {
+              const edited = fraOverrides[p.name] != null && fraOverrides[p.name] !== '';
+              return (
+                <div key={p.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}>{p.label}</span>
+                  <input type="number" step="0.05"
+                    value={edited ? fraOverrides[p.name] : (latest[p.name] != null ? Number(latest[p.name]).toFixed(3) : '')}
+                    onChange={e => setFraOverrides(o => ({ ...o, [p.name]: e.target.value }))}
+                    style={{ width: 58, fontSize: 11, padding: '3px 4px', borderRadius: 5, textAlign: 'center',
+                      border: `1px solid ${edited ? '#fbbf24' : '#334155'}`, background: '#0f172a', color: edited ? '#fbbf24' : '#e2e8f0' }} />
+                </div>
+              );
+            })}
+            {fraDirty && (
+              <button onClick={() => setFraOverrides({})}
+                style={{ fontSize: 11, padding: '5px 12px', borderRadius: 10, border: '1px solid #f87171', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>
+                ↺ Reset FRA curve
+              </button>
+            )}
+          </div>
+
+          {yb.Control}
+          <ResizableChart width="100%" height={340}>
+            <LineChart data={fraPath} margin={{ top: 16, right: 40, left: 0, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
+              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={50} />
+              <YAxis domain={yb.domain} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
+              <Tooltip content={<FraTooltip />} />
+              <Line type="monotone" dataKey="rate" stroke={fraDirty ? '#fbbf24' : '#38bdf8'} strokeWidth={2} dot={{ r: 3, fill: fraDirty ? '#fbbf24' : '#38bdf8' }} connectNulls>
+                <LabelList dataKey="rate" position="top" style={{ fill: fraDirty ? '#fbbf24' : '#38bdf8', fontSize: 9 }} formatter={v => `${v}%`} />
+              </Line>
+            </LineChart>
+          </ResizableChart>
+          {fraRead && (
+            <p style={{ fontSize: 13, color: '#cbd5e1', margin: '10px 4px 0', lineHeight: 1.5 }}>
+              <strong style={{ color: fraRead.dir === 'down' ? '#4ade80' : fraRead.dir === 'up' ? '#f87171' : '#94a3b8' }}>
+                {fraRead.dir === 'down' ? '↓ Cuts priced' : fraRead.dir === 'up' ? '↑ Hikes priced' : '→ Flat'}:
+              </strong>{' '}
+              {fraRead.text}
+            </p>
+          )}
+
+          {fraIncrease.length > 0 && (
+            <>
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#64748b', margin: '20px 0 8px' }}>
+                Cumulative increase from base
+              </p>
+              <ResizableChart width="100%" height={220}>
+                <BarChart data={fraIncrease} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis
+                    dataKey="month" type="number" domain={[0, 'dataMax']}
+                    ticks={fraIncrease.map(d => d.month)}
+                    tickFormatter={m => { const pt = fraIncrease.find(d => d.month === m); return pt ? pt.label : m; }}
+                    tick={{ fill: '#64748b', fontSize: 9 }} interval={0}
+                  />
+                  <YAxis domain={[0, 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
+                  <Tooltip content={<IncrTooltip />} />
+                  <Bar dataKey="incr" name="Cum. Increase" fill={fraDirty ? '#fbbf24' : '#38bdf8'} radius={[4, 4, 0, 0]} barSize={28}>
+                    <LabelList dataKey="incr" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
+                  </Bar>
+                </BarChart>
+              </ResizableChart>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TOP — scenario comparator */}
+      <CashScenario latest={latest} instruments={instruments} markers={markers} fraOverrides={fraOverrides} />
 
       {/* SECTION 1 — cash on offer */}
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 }}>
@@ -340,63 +445,7 @@ export default function CashTab({ data, instruments }) {
         </div>
       )}
 
-      {/* SECTION 3 — what the market is pricing (Zaronia forward curve) */}
-      {fraPath.length > 1 && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>What the market is pricing in</h3>
-          <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>
-            Zaronia forward curve (FRAs) — the market's expected path of the short rate.
-          </p>
-          {yb.Control}
-          <ResizableChart width="100%" height={340}>
-            <LineChart data={fraPath} margin={{ top: 16, right: 40, left: 0, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
-              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={50} />
-              <YAxis domain={yb.domain} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
-              <Tooltip content={<FraTooltip />} />
-              <Line type="monotone" dataKey="rate" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3, fill: '#38bdf8' }} connectNulls>
-                <LabelList dataKey="rate" position="top" style={{ fill: '#38bdf8', fontSize: 9 }} formatter={v => `${v}%`} />
-              </Line>
-            </LineChart>
-          </ResizableChart>
-          {fraRead && (
-            <p style={{ fontSize: 13, color: '#cbd5e1', margin: '10px 4px 0', lineHeight: 1.5 }}>
-              <strong style={{ color: fraRead.dir === 'down' ? '#4ade80' : fraRead.dir === 'up' ? '#f87171' : '#94a3b8' }}>
-                {fraRead.dir === 'down' ? '↓ Cuts priced' : fraRead.dir === 'up' ? '↑ Hikes priced' : '→ Flat'}:
-              </strong>{' '}
-              {fraRead.text}
-            </p>
-          )}
-
-          {/* Cumulative increase from base (as in Market Pricing) */}
-          {fraIncrease.length > 0 && (
-            <>
-              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#64748b', margin: '20px 0 8px' }}>
-                Cumulative increase from base
-              </p>
-              <ResizableChart width="100%" height={220}>
-                <BarChart data={fraIncrease} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis
-                    dataKey="month" type="number" domain={[0, 'dataMax']}
-                    ticks={fraIncrease.map(d => d.month)}
-                    tickFormatter={m => { const pt = fraIncrease.find(d => d.month === m); return pt ? pt.label : m; }}
-                    tick={{ fill: '#64748b', fontSize: 9 }} interval={0}
-                  />
-                  <YAxis domain={[0, 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
-                  <Tooltip content={<IncrTooltip />} />
-                  <Bar dataKey="incr" name="Cum. Increase" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={28}>
-                    <LabelList dataKey="incr" position="top" style={{ fill: '#94a3b8', fontSize: 10 }} formatter={v => v != null ? `${v}%` : ''} />
-                  </Bar>
-                </BarChart>
-              </ResizableChart>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* SECTION 4 — scenario comparator */}
-      <CashScenario latest={latest} instruments={instruments} markers={markers} />
+      {/* (market pricing + comparator moved to the top) */}
     </div>
   );
 }
