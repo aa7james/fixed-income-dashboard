@@ -7,9 +7,13 @@ const inpStyle = { width: 70, fontSize: 12, padding: '4px 6px', borderRadius: 6,
 export function useYAxisBounds(label = 'Y-axis') {
   const [yMin, setYMin] = useState('');
   const [yMax, setYMax] = useState('');
-  const lo = yMin !== '' && !isNaN(+yMin) ? +yMin : 'auto';
-  const hi = yMax !== '' && !isNaN(+yMax) ? +yMax : 'auto';
-  const domain = [lo, hi];
+  const hasMin = yMin !== '' && !isNaN(+yMin);
+  const hasMax = yMax !== '' && !isNaN(+yMax);
+  // Both blank → nice auto. Once either is set, use exact data extent for the other
+  // end (not 'auto') so recharts respects the typed bound instead of nice-rounding it.
+  const domain = (!hasMin && !hasMax)
+    ? ['auto', 'auto']
+    : [hasMin ? +yMin : 'dataMin', hasMax ? +yMax : 'dataMax'];
 
   const Control = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', flexWrap: 'wrap' }}>
