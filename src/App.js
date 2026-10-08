@@ -11,9 +11,10 @@ import RefreshDataButton from './components/RefreshDataButton';
 import NewsSidebar from './components/NewsSidebar';
 import InstrumentsAdmin from './components/InstrumentsAdmin';
 import CashTab from './components/CashTab';
+import ModelPortfolio from './components/ModelPortfolio';
 import styles from './App.module.css';
 
-const TABS = ['Yield Curve', 'Cash', 'Market Pricing', 'Chart Builder', 'My Charts', 'Investment Pack', 'Instruments', 'Latest Rates'];
+const TABS = ['Yield Curve', 'Cash', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Investment Pack', 'Instruments', 'Latest Rates'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -182,6 +183,7 @@ export default function App() {
             {activeTab === 'Yield Curve'     && <YieldCurve     data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
             {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
+            {activeTab === 'Model Portfolio' && <ModelPortfolio data={data} instruments={instruments} />}
             {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} onReorder={reorderPack} onUpdateNote={updatePackNote} data={data} instruments={instruments} />}
             {activeTab === 'Instruments'     && <InstrumentsAdmin />}
           </main>
