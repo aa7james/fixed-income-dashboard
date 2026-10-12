@@ -81,7 +81,7 @@ export default function SAGovBonds({ data, instruments }) {
         };
       })
       .filter(Boolean)
-      .sort((a, b) => b.beBps - a.beBps);
+      .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
   }, [latest, instruments, cashRate]);
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
