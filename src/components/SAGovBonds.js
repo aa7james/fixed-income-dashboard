@@ -17,15 +17,6 @@ function bondPV(y, n, c) {
   return pv;
 }
 
-// Clean price (strips accrued interest) per 100 face.
-function cleanPrice(y, n, c) {
-  const dirty = bondPV(y, n, c);
-  const tp = n * 2, count = Math.ceil(tp - 1e-9);
-  const t1 = tp - (count - 1);      // periods to next coupon, in (0, 1]
-  const accrued = (c / 2) * (1 - t1);
-  return dirty - accrued;
-}
-
 // Linear interpolation of a {N, y} curve at x years.
 function interp(curve, x) {
   if (!curve.length) return null;
@@ -75,8 +66,8 @@ export default function SAGovBonds({ data, instruments }) {
         const yRoll = interp(curve, g.N - 1);       // where it rolls to on an unchanged curve
         const rollDown = g.ytm - yRoll;             // yield given up as it rolls (%-pts)
         const mod = modDuration(g.ytm, g.N, g.c);
-        const clean = cleanPrice(g.ytm, g.N, g.c);
-        const couponRet = (g.c / clean) * 100;      // coupon income / price = current yield (%)
+        const price = bondPV(g.ytm, g.N, g.c);      // dirty price = capital actually invested
+        const couponRet = (g.c / price) * 100;      // coupon income / dirty price (%)
         const rollRet = mod * rollDown;             // price gain from rolling down (%)
         const totalRet = couponRet + rollRet;       // bond's 1y return, curve unchanged (%)
         const excess = totalRet - cashRate;         // edge over 1y cash (%)
@@ -150,7 +141,7 @@ export default function SAGovBonds({ data, instruments }) {
           </table>
         </div>
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
-          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> (the bond ages to a lower yield on an unchanged curve; gain = mod. dur. × yield given up).
+          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> (the bond ages to a lower yield on an unchanged curve; gain = mod. dur. × yield given up).
           <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − 1y {bench} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
           <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = Excess ÷ mod. dur. — how far the yield can rise before the bond matches cash. Bigger = more cushion.
         </p>
