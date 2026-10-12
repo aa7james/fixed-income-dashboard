@@ -74,7 +74,7 @@ export default function SAGovBonds({ data, instruments }) {
         const beBps = (excess / mod) * 100;         // yield rise that erases the edge (bps)
         return {
           ...g, mod, modH: modDuration(g.ytm, g.N - 1, g.c),
-          rollBps: rollDown * 100, couponRet, rollRet, totalRet, excess, beBps,
+          yRoll, rollBps: rollDown * 100, couponRet, rollRet, totalRet, excess, beBps,
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
@@ -115,6 +115,7 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Mod. dur.</th>
                 <th style={cell()}>Mod. dur. @ horizon</th>
                 <th style={cell()}>Coupon return</th>
+                <th style={cell()}>Rolls to</th>
                 <th style={cell()}>Roll‑down return</th>
                 <th style={cell()}>Total return</th>
                 <th style={cell()}>Excess vs cash</th>
@@ -131,6 +132,7 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ color: '#94a3b8' })}>{r.mod.toFixed(1)}</td>
                   <td style={cell({ color: '#64748b' })}>{r.modH.toFixed(1)}</td>
                   <td style={cell()}>{r.couponRet.toFixed(2)}%</td>
+                  <td style={cell({ color: '#94a3b8' })}>{r.yRoll.toFixed(2)}% <span style={{ color: '#475569', fontSize: 11 }}>(−{Math.round(r.rollBps)}bp)</span></td>
                   <td style={cell({ color: '#2dd4bf' })}>{r.rollRet >= 0 ? '+' : ''}{r.rollRet.toFixed(2)}%</td>
                   <td style={cell({ fontWeight: 700 })}>{r.totalRet.toFixed(2)}%</td>
                   <td style={cell({ color: r.excess >= 0 ? '#4ade80' : '#f87171' })}>{r.excess >= 0 ? '+' : ''}{r.excess.toFixed(2)}%</td>
@@ -141,7 +143,7 @@ export default function SAGovBonds({ data, instruments }) {
           </table>
         </div>
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
-          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> (the bond ages to a lower yield on an unchanged curve; gain = mod. dur. × yield given up).
+          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — on an unchanged curve the bond ages to the <strong>Rolls to</strong> yield (the curve's (N−1)‑year point); gain = mod. dur. × (YTM − Rolls to).
           <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − 1y {bench} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
           <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = Excess ÷ mod. dur. — how far the yield can rise before the bond matches cash. Bigger = more cushion.
         </p>
