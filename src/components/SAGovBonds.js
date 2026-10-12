@@ -134,7 +134,7 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ color: '#64748b' })}>{r.modH.toFixed(1)}</td>
                   <td style={cell()}>{r.couponRet.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.yRoll.toFixed(2)}% <span style={{ color: '#475569', fontSize: 11 }}>(−{Math.round(r.rollBps)}bp)</span></td>
-                  <td style={cell({ color: '#2dd4bf' })}>{r.rollRet >= 0 ? '+' : ''}{r.rollRet.toFixed(2)}%</td>
+                  <td style={cell({ color: r.rollRet >= 0 ? '#2dd4bf' : '#f87171' })}>{r.rollRet >= 0 ? '+' : ''}{r.rollRet.toFixed(2)}%</td>
                   <td style={cell({ fontWeight: 700 })}>{r.totalRet.toFixed(2)}%</td>
                   <td style={cell({ color: r.excess >= 0 ? '#4ade80' : '#f87171' })}>{r.excess >= 0 ? '+' : ''}{r.excess.toFixed(2)}%</td>
                   <td style={cell({ fontWeight: 700, color: r.beBps >= 20 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>{r.beBps >= 0 ? '+' : ''}{Math.round(r.beBps)}</td>
