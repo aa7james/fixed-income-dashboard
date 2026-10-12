@@ -96,6 +96,7 @@ export default function SAGovBonds({ data, instruments }) {
         const beRoll = breakevenRise(g.ytm, yRoll, g.N, g.c, target) * 100;
         return {
           ...g, mod: modDuration(g.ytm, g.N, g.c),
+          modH: modDuration(g.ytm, g.N - 1, g.c),   // duration at the 1y horizon (bond 1y shorter)
           rollBps: roll * 100, trFlat: trFlat * 100, trRoll: trRoll * 100,
           beFlat, beRoll, diff: beRoll - beFlat,
         };
@@ -131,7 +132,7 @@ export default function SAGovBonds({ data, instruments }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
             <thead>
               <tr style={{ color: '#64748b', fontSize: 11 }}>
-                <th colSpan={5}></th>
+                <th colSpan={6}></th>
                 <th colSpan={2} style={{ padding: '2px 8px', textAlign: 'center', borderBottom: '1px solid #334155' }}>No roll‑down</th>
                 <th colSpan={2} style={{ padding: '2px 8px', textAlign: 'center', borderBottom: '1px solid #334155' }}>With roll‑down</th>
                 <th></th>
@@ -142,6 +143,7 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Maturity</th>
                 <th style={cell()}>YTM</th>
                 <th style={cell()}>Mod. dur.</th>
+                <th style={cell()}>Mod. dur. @ horizon</th>
                 <th style={cell()}>1y TR</th>
                 <th style={cell()}>Breakeven</th>
                 <th style={cell()}>1y TR</th>
@@ -157,6 +159,7 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
                   <td style={cell({ fontWeight: 700 })}>{r.ytm.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.mod.toFixed(1)}</td>
+                  <td style={cell({ color: '#64748b' })}>{r.modH.toFixed(1)}</td>
                   <td style={cell()}>{r.trFlat.toFixed(2)}%</td>
                   <td style={cell({ fontWeight: 700, color: r.beFlat >= 20 ? '#4ade80' : r.beFlat >= 0 ? '#fbbf24' : '#f87171' })}>{r.beFlat >= 0 ? '+' : ''}{Math.round(r.beFlat)}</td>
                   <td style={cell({ color: '#2dd4bf' })}>{r.trRoll.toFixed(2)}%</td>
