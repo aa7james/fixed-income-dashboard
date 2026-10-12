@@ -17,19 +17,32 @@ function bondPV(y, n, c) {
   return pv;
 }
 
-// 1-year holding-period total return (decimal) for a yield change dy (%).
-// Coupons paid within the year are reinvested at the horizon yield to the horizon.
-function horizonTR(y0, dy, N, c) {
-  const y1 = y0 + dy;
+// 1-year holding-period total return (decimal): bought at y0 today, marked at the
+// horizon yield yH 1 year shorter; in-year coupons reinvested at yH.
+function trAtHorizonYield(y0, yH, N, c) {
   const D0 = bondPV(y0, N, c);
-  const D1 = bondPV(y1, N - 1, c);
+  const D1 = bondPV(yH, N - 1, c);
   const tp = N * 2, count = Math.ceil(tp - 1e-9);
   let reinv = 0;
   for (let k = 1; k <= count; k++) {
     const t = tp - (count - k);
-    if (t <= 2 + 1e-9) reinv += (c / 2) * Math.pow(1 + y1 / 100, (2 - t) / 2);
+    if (t <= 2 + 1e-9) reinv += (c / 2) * Math.pow(1 + yH / 100, (2 - t) / 2);
   }
   return (D1 + reinv) / D0 - 1;
+}
+
+// Linear interpolation of a {N, y} curve at x years.
+function interp(curve, x) {
+  if (!curve.length) return null;
+  if (x <= curve[0].N) return curve[0].y;
+  if (x >= curve[curve.length - 1].N) return curve[curve.length - 1].y;
+  for (let i = 1; i < curve.length; i++) {
+    if (x <= curve[i].N) {
+      const a = curve[i - 1], b = curve[i];
+      return a.y + (x - a.N) / (b.N - a.N) * (b.y - a.y);
+    }
+  }
+  return curve[curve.length - 1].y;
 }
 
 function modDuration(y0, N, c) {
@@ -39,12 +52,12 @@ function modDuration(y0, N, c) {
   return (-((up - dn) / (2 * h)) / p) * 100;
 }
 
-// Δy (decimal of %, i.e. 0.0123 = +1.23%) at which bond 1y TR == target cash return.
-function breakevenDy(y0, N, c, target) {
-  const f = (dy) => horizonTR(y0, dy, N, c) - target;
+// Yield rise (in %) above a baseline horizon yield at which bond 1y TR == target cash return.
+function breakevenRise(y0, yBase, N, c, target) {
+  const f = (dy) => trAtHorizonYield(y0, yBase + dy, N, c) - target;
   let lo = -1, hi = 3; // yield move in %: -100bps .. +300bps
   if (f(lo) < 0) return lo;
-  if (f(hi) > 0) return hi;  // cushion exceeds +25%
+  if (f(hi) > 0) return hi;
   for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
   return (lo + hi) / 2;
 }
@@ -63,24 +76,30 @@ export default function SAGovBonds({ data, instruments }) {
     if (!latest || !instruments?.length || cashRate == null) return [];
     const now = new Date();
     const target = cashRate / 100; // 1y cash return (simple)
-    return instruments
-      .filter(i => i.category === 'Government Bonds' && i.is_active !== false && i.coupon != null && i.maturity_date)
-      .map(i => {
-        const y0 = latest[i.name];
-        const N = (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365);
-        if (y0 == null || N <= 1.02) return null; // need a 1y horizon left
-        const c = Number(i.coupon) * 100;
-        const y = Number(y0);
-        const tr0 = horizonTR(y, 0, N, c);        // 1y TR if yield unchanged
-        const be = breakevenDy(y, N, c, target);  // breakeven yield rise
+    const govies = instruments
+      .filter(i => i.category === 'Government Bonds' && i.is_active !== false && i.coupon != null && i.maturity_date && latest[i.name] != null)
+      .map(i => ({
+        label: i.display_label || i.name, c: Number(i.coupon) * 100, maturity: i.maturity_date,
+        N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365), ytm: Number(latest[i.name]),
+      }));
+    // Yield curve = every govie point (incl. sub-1y) so N-1 can be interpolated.
+    const curve = govies.map(g => ({ N: g.N, y: g.ytm })).sort((a, b) => a.N - b.N);
+
+    return govies
+      .filter(g => g.N > 1.02) // need a 1y horizon left
+      .map(g => {
+        const yRoll = interp(curve, g.N - 1);          // where it rolls to on an unchanged curve
+        const roll = g.ytm - yRoll;                    // roll-down (yield gives up)
+        const trFlat = trAtHorizonYield(g.ytm, g.ytm, g.N, g.c);   // curve-unchanged, no roll
+        const trRoll = trAtHorizonYield(g.ytm, yRoll, g.N, g.c);   // curve-unchanged, with roll
+        const beFlat = breakevenRise(g.ytm, g.ytm, g.N, g.c, target) * 100;
+        const beRoll = breakevenRise(g.ytm, yRoll, g.N, g.c, target) * 100;
         return {
-          label: i.display_label || i.name, coupon: c, maturity: i.maturity_date, N,
-          ytm: y, tr0: tr0 * 100, mod: modDuration(y, N, c),
-          pickup: (tr0 - target) * 10000, // bps of 1y return vs cash if yields flat
-          beBps: be * 100, // be is in % (percentage points) → bps
+          ...g, mod: modDuration(g.ytm, g.N, g.c),
+          rollBps: roll * 100, trFlat: trFlat * 100, trRoll: trRoll * 100,
+          beFlat, beRoll, diff: beRoll - beFlat,
         };
       })
-      .filter(Boolean)
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
   }, [latest, instruments, cashRate]);
 
@@ -111,42 +130,49 @@ export default function SAGovBonds({ data, instruments }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
             <thead>
+              <tr style={{ color: '#64748b', fontSize: 11 }}>
+                <th colSpan={5}></th>
+                <th colSpan={2} style={{ padding: '2px 8px', textAlign: 'center', borderBottom: '1px solid #334155' }}>No roll‑down</th>
+                <th colSpan={2} style={{ padding: '2px 8px', textAlign: 'center', borderBottom: '1px solid #334155' }}>With roll‑down</th>
+                <th></th>
+              </tr>
               <tr style={{ color: '#94a3b8' }}>
                 <th style={{ padding: '8px 10px', textAlign: 'left' }}>Bond</th>
                 <th style={cell()}>Coupon</th>
                 <th style={cell()}>Maturity</th>
                 <th style={cell()}>YTM</th>
                 <th style={cell()}>Mod. dur.</th>
-                <th style={cell()}>1y TR (flat)</th>
-                <th style={cell()}>vs cash (flat)</th>
-                <th style={cell()}>Breakeven yield rise</th>
+                <th style={cell()}>1y TR</th>
+                <th style={cell()}>Breakeven</th>
+                <th style={cell()}>1y TR</th>
+                <th style={cell()}>Breakeven</th>
+                <th style={cell()}>Roll adds</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(r => (
                 <tr key={r.label} style={{ borderTop: '1px solid #0f172a' }}>
                   <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>{r.label}</td>
-                  <td style={cell({ color: '#94a3b8' })}>{r.coupon.toFixed(2)}%</td>
+                  <td style={cell({ color: '#94a3b8' })}>{r.c.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
                   <td style={cell({ fontWeight: 700 })}>{r.ytm.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.mod.toFixed(1)}</td>
-                  <td style={cell()}>{r.tr0.toFixed(2)}%</td>
-                  <td style={cell({ color: r.pickup >= 0 ? '#4ade80' : '#f87171' })}>{r.pickup >= 0 ? '+' : ''}{Math.round(r.pickup)} bps</td>
-                  <td style={cell({ fontWeight: 700, color: r.beBps >= 20 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>
-                    {r.beBps >= 0 ? '+' : ''}{Math.round(r.beBps)} bps
-                  </td>
+                  <td style={cell()}>{r.trFlat.toFixed(2)}%</td>
+                  <td style={cell({ fontWeight: 700, color: r.beFlat >= 20 ? '#4ade80' : r.beFlat >= 0 ? '#fbbf24' : '#f87171' })}>{r.beFlat >= 0 ? '+' : ''}{Math.round(r.beFlat)}</td>
+                  <td style={cell({ color: '#2dd4bf' })}>{r.trRoll.toFixed(2)}%</td>
+                  <td style={cell({ fontWeight: 700, color: r.beRoll >= 20 ? '#4ade80' : r.beRoll >= 0 ? '#fbbf24' : '#f87171' })}>{r.beRoll >= 0 ? '+' : ''}{Math.round(r.beRoll)}</td>
+                  <td style={cell({ color: '#a78bfa' })}>+{Math.round(r.diff)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
-          <strong style={{ color: '#4ade80' }}>Breakeven yield rise</strong> = how much the bond's own yield can rise over the year before its 1‑year total return
-          drops to the 1y {bench} return. Bigger = more cushion. If the yield rises by <em>less</em> than this, the bond beats cash; by <em>more</em>, cash wins.
+          <strong style={{ color: '#4ade80' }}>Breakeven</strong> (bps) = how far the bond's yield can rise over the year before its 1‑year total return drops to the 1y {bench} ({cashRate?.toFixed(2)}%). Bigger = more cushion.
+          <strong style={{ color: '#2dd4bf' }}> With roll‑down</strong> assumes the curve is unchanged, so the bond ages to a lower yield (the (N‑1)‑year point) — adding return and widening the cushion by <strong style={{ color: '#a78bfa' }}>Roll adds</strong>.
         </p>
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
-          Full repricing: bond priced today (semi‑annual) and re‑priced 1 year shorter at the shifted yield; coupons paid in the year are reinvested at the horizon yield.
-          "Flat" = yield unchanged. Assumes a parallel move in the bond's own yield (no curve roll‑down), ACT/365, and clean entry. Bonds maturing within a year are excluded.
+          Full repricing (semi‑annual), coupons reinvested at the horizon yield. "No roll‑down" = parallel move off today's yield. Roll‑down interpolated from the govie curve. ACT/365, clean entry, bonds maturing within a year excluded.
         </p>
       </div>
     </div>
