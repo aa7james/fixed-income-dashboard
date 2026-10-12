@@ -55,7 +55,7 @@ export default function ModelPortfolio({ data, instruments }) {
   const yb = useYAxisBounds();
 
   const instNames = useMemo(() => (instruments || []).map(i => i.name).sort(), [instruments]);
-  const dataRows = data?.dataRows || [];
+  const dataRows = useMemo(() => data?.dataRows || [], [data]);
 
   const loadList = () => supabase.from('model_portfolios').select('*').order('created_at')
     .then(({ data: rows }) => setPortfolios(rows || [])).catch(() => {});
