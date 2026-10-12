@@ -66,9 +66,10 @@ export default function SAGovBonds({ data, instruments }) {
         const yRoll = interp(curve, g.N - 1);       // where it rolls to on an unchanged curve
         const rollDown = g.ytm - yRoll;             // yield given up as it rolls (%-pts)
         const mod = modDuration(g.ytm, g.N, g.c);
-        const price = bondPV(g.ytm, g.N, g.c);      // dirty price = capital actually invested
+        const price = bondPV(g.ytm, g.N, g.c);      // dirty price today = capital invested
+        const priceH = bondPV(yRoll, g.N - 1, g.c); // dirty price in 1y, repriced on unchanged curve
         const couponRet = (g.c / price) * 100;      // coupon income / dirty price (%)
-        const rollRet = mod * rollDown;             // price gain from rolling down (%)
+        const rollRet = (priceH / price - 1) * 100; // full reprice: roll-down + pull-to-par (%)
         const totalRet = couponRet + rollRet;       // bond's 1y return, curve unchanged (%)
         const excess = totalRet - cashRate;         // edge over 1y cash (%)
         const beBps = (excess / mod) * 100;         // yield rise that erases the edge (bps)
@@ -143,12 +144,12 @@ export default function SAGovBonds({ data, instruments }) {
           </table>
         </div>
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
-          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — on an unchanged curve the bond ages to the <strong>Rolls to</strong> yield (the curve's (N−1)‑year point); gain = mod. dur. × (YTM − Rolls to).
+          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — reprice the bond 1 year on (now N−1 years) at the <strong>Rolls to</strong> yield (the curve's (N−1)‑year point) vs its price today: captures both the yield roll‑down and the pull‑to‑par.
           <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − 1y {bench} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
           <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = Excess ÷ mod. dur. — how far the yield can rise before the bond matches cash. Bigger = more cushion.
         </p>
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
-          Simple carry + roll model (no coupon reinvestment). Roll‑down interpolated from the govie curve. Breakeven uses today's modified duration; "Mod. dur. @ horizon" (bond 1y shorter) shown for reference. ACT/365, bonds maturing within a year excluded.
+          Carry + roll model (no coupon reinvestment). Roll‑down is a full semi‑annual reprice; roll‑to yield interpolated from the govie curve. Breakeven uses today's modified duration; "Mod. dur. @ horizon" (bond 1y shorter) shown for reference. ACT/365, bonds maturing within a year excluded.
         </p>
       </div>
     </div>
