@@ -33,15 +33,16 @@ function horizonTR(y0, dy, N, c) {
 }
 
 function modDuration(y0, N, c) {
-  const h = 0.01;
+  const h = 0.01; // 1bp bump in % units
   const up = bondPV(y0 + h, N, c), dn = bondPV(y0 - h, N, c), p = bondPV(y0, N, c);
-  return -((up - dn) / (2 * h)) / p;
+  // y is in %, so convert dP/d(%)/P to years (× 100 to get per-decimal duration)
+  return (-((up - dn) / (2 * h)) / p) * 100;
 }
 
 // Δy (decimal of %, i.e. 0.0123 = +1.23%) at which bond 1y TR == target cash return.
 function breakevenDy(y0, N, c, target) {
   const f = (dy) => horizonTR(y0, dy, N, c) - target;
-  let lo = -0.05, hi = 0.25; // search -5% .. +25% yield move
+  let lo = -1, hi = 3; // yield move in %: -100bps .. +300bps
   if (f(lo) < 0) return lo;
   if (f(hi) > 0) return hi;  // cushion exceeds +25%
   for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
@@ -76,7 +77,7 @@ export default function SAGovBonds({ data, instruments }) {
           label: i.display_label || i.name, coupon: c, maturity: i.maturity_date, N,
           ytm: y, tr0: tr0 * 100, mod: modDuration(y, N, c),
           pickup: (tr0 - target) * 10000, // bps of 1y return vs cash if yields flat
-          beBps: be * 10000,
+          beBps: be * 100, // be is in % (percentage points) → bps
         };
       })
       .filter(Boolean)
@@ -131,7 +132,7 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ color: '#94a3b8' })}>{r.mod.toFixed(1)}</td>
                   <td style={cell()}>{r.tr0.toFixed(2)}%</td>
                   <td style={cell({ color: r.pickup >= 0 ? '#4ade80' : '#f87171' })}>{r.pickup >= 0 ? '+' : ''}{Math.round(r.pickup)} bps</td>
-                  <td style={cell({ fontWeight: 700, color: r.beBps >= 100 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>
+                  <td style={cell({ fontWeight: 700, color: r.beBps >= 20 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>
                     {r.beBps >= 0 ? '+' : ''}{Math.round(r.beBps)} bps
                   </td>
                 </tr>
