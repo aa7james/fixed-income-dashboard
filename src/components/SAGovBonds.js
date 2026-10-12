@@ -65,7 +65,8 @@ function breakevenReprice(yRoll, N, c, couponRet, P0, cashRate) {
 }
 
 export default function SAGovBonds({ data, instruments }) {
-  const [bench, setBench] = useState('NCD'); // 'NCD' | 'T-Bill'
+  const [bench, setBench] = useState('NCD'); // 'NCD' | 'T-Bill' | 'Call' | 'Zero'
+  const [callRate, setCallRate] = useState('7.10'); // editable call-account rate (%)
   const [showCurve, setShowCurve] = useState(true);
   const allRows = useMemo(() => data?.dataRows || [], [data]);
   const minISO = allRows.length ? iso(allRows[0].date) : '';
@@ -89,10 +90,15 @@ export default function SAGovBonds({ data, instruments }) {
   };
 
   const cashRate = useMemo(() => {
+    if (bench === 'Zero') return 0;
+    if (bench === 'Call') { const n = parseFloat(callRate); return isNaN(n) ? null : n; }
     if (!latest) return null;
     const v = bench === 'NCD' ? latest['12m Fixed Rate NCD'] : latest['12m T-Bill'];
     return v == null ? null : Number(v);
-  }, [latest, bench]);
+  }, [latest, bench, callRate]);
+
+  const benchLabel = bench === 'NCD' ? '1y NCD' : bench === 'T-Bill' ? '1y T-Bill'
+    : bench === 'Call' ? 'Call' : '0% (breakeven)';
 
   const rows = useMemo(() => {
     if (!latest || !instruments?.length || cashRate == null) return [];
@@ -168,14 +174,21 @@ export default function SAGovBonds({ data, instruments }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>Benchmark (1‑year cash):</span>
-        {['NCD', 'T-Bill'].map(b => (
-          <button key={b} onClick={() => setBench(b)}
-            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: bench === b ? 700 : 400,
-              border: '1px solid #334155', background: bench === b ? '#0ea5e9' : '#1e293b', color: bench === b ? '#fff' : '#94a3b8' }}>{b}</button>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Benchmark:</span>
+        {[['1y NCD', 'NCD'], ['1y T-Bill', 'T-Bill'], ['Call', 'Call'], ['0% (breakeven)', 'Zero']].map(([lbl, val]) => (
+          <button key={val} onClick={() => setBench(val)}
+            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: bench === val ? 700 : 400,
+              border: '1px solid #334155', background: bench === val ? '#0ea5e9' : '#1e293b', color: bench === val ? '#fff' : '#94a3b8' }}>{lbl}</button>
         ))}
+        {bench === 'Call' && (
+          <span style={{ fontSize: 12, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            rate:
+            <input type="number" step="0.05" value={callRate} onChange={e => setCallRate(e.target.value)}
+              style={{ width: 70, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }} />%
+          </span>
+        )}
         <span style={{ fontSize: 13, color: '#cbd5e1' }}>
-          1y {bench} = <strong style={{ color: '#38bdf8' }}>{cashRate != null ? cashRate.toFixed(2) : '—'}%</strong>
+          {benchLabel} = <strong style={{ color: '#38bdf8' }}>{cashRate != null ? cashRate.toFixed(2) : '—'}%</strong>
         </span>
       </div>
 
@@ -220,8 +233,8 @@ export default function SAGovBonds({ data, instruments }) {
         </div>
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
           <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — reprice the bond 1 year on (now N−1 years) at the <strong>Rolls to</strong> yield (the curve's (N−1)‑year point) vs its price today: captures both the yield roll‑down and the pull‑to‑par.
-          <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − 1y {bench} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
-          <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = the extra yield rise (full reprice at the horizon) at which the bond's total return drops to the 1y {bench}. Bigger = more cushion; negative = already behind cash.
+          <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − {benchLabel} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
+          <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = the extra yield rise (full reprice at the horizon) at which the bond's total return drops to the {benchLabel}. Bigger = more cushion; negative = already behind cash.
         </p>
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
           Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
@@ -251,14 +264,16 @@ export default function SAGovBonds({ data, instruments }) {
                 <YAxis domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 11 }}
                   tickFormatter={v => `${v.toFixed(1)}%`} stroke="#475569" width={48} />
                 <Tooltip content={<CurveTooltip />} />
-                <ReferenceLine y={cashRate} stroke="#f59e0b" strokeDasharray="5 4"
-                  label={{ value: `1y ${bench} ${cashRate?.toFixed(2)}%`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }} />
+                {cashRate != null && cashRate > 0 && (
+                  <ReferenceLine y={cashRate} stroke="#f59e0b" strokeDasharray="5 4"
+                    label={{ value: `${benchLabel} ${cashRate.toFixed(2)}%`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }} />
+                )}
                 <Line type="monotone" dataKey="ytm" stroke="#38bdf8" strokeWidth={2}
                   dot={{ r: 3, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false} />
               </LineChart>
             </ResizableChart>
             <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0' }}>
-              Nominal govie YTMs by years to maturity, as at {latest.dateStr}. Dashed line = 1y {bench} ({cashRate?.toFixed(2)}%). Drag the bottom‑right corner to resize.
+              Nominal govie YTMs by years to maturity, as at {latest.dateStr}.{cashRate > 0 ? ` Dashed line = ${benchLabel} (${cashRate?.toFixed(2)}%).` : ''} Drag the bottom‑right corner to resize.
             </p>
           </div>
         )}
