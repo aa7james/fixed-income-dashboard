@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 
 const cell = (x = {}) => ({ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...x });
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Dirty price per 100 face, semi-annual. y, c in %; n = years to maturity (fractional ok).
 function bondPV(y, n, c) {
@@ -52,7 +53,26 @@ function breakevenReprice(yRoll, N, c, couponRet, P0, cashRate) {
 
 export default function SAGovBonds({ data, instruments }) {
   const [bench, setBench] = useState('NCD'); // 'NCD' | 'T-Bill'
-  const latest = data?.dataRows?.length ? data.dataRows[data.dataRows.length - 1] : null;
+  const allRows = useMemo(() => data?.dataRows || [], [data]);
+  const minISO = allRows.length ? iso(allRows[0].date) : '';
+  const maxISO = allRows.length ? iso(allRows[allRows.length - 1].date) : '';
+  const [asOf, setAsOf] = useState(maxISO);
+
+  // the data row on or before the selected as-of date (rows are sorted ascending)
+  const latest = useMemo(() => {
+    if (!allRows.length) return null;
+    const target = asOf || maxISO;
+    let row = allRows[0];
+    for (const r of allRows) { if (iso(r.date) <= target) row = r; else break; }
+    return row;
+  }, [allRows, asOf, maxISO]);
+
+  const setYearsBack = (yrs) => {
+    if (!maxISO) return;
+    const d = new Date(allRows[allRows.length - 1].date);
+    d.setFullYear(d.getFullYear() - yrs);
+    setAsOf(iso(d));
+  };
 
   const cashRate = useMemo(() => {
     if (!latest) return null;
@@ -62,9 +82,10 @@ export default function SAGovBonds({ data, instruments }) {
 
   const rows = useMemo(() => {
     if (!latest || !instruments?.length || cashRate == null) return [];
-    const now = new Date();
+    const now = latest.date; // value the maturities are measured from = the as-at date
     const govies = instruments
-      .filter(i => i.category === 'Government Bonds' && i.is_active !== false && i.coupon != null && i.maturity_date && latest[i.name] != null)
+      .filter(i => i.category === 'Government Bonds' && i.coupon != null && i.maturity_date
+        && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
       .map(i => ({
         label: i.display_label || i.name, c: Number(i.coupon) * 100, maturity: i.maturity_date,
         N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365), ytm: Number(latest[i.name]),
@@ -102,6 +123,19 @@ export default function SAGovBonds({ data, instruments }) {
         <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
           How far can each bond's yield rise over 1 year before you'd have been better off in 1‑year cash? · as at {latest.dateStr}
         </p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>As at:</span>
+        <input type="date" value={asOf || maxISO} min={minISO} max={maxISO}
+          onChange={e => setAsOf(e.target.value)}
+          style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }} />
+        {[['Latest', null], ['−1y', 1], ['−3y', 3], ['−5y', 5]].map(([lbl, yrs]) => (
+          <button key={lbl} onClick={() => yrs == null ? setAsOf(maxISO) : setYearsBack(yrs)}
+            style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+              border: '1px solid #334155', background: '#1e293b', color: '#94a3b8' }}>{lbl}</button>
+        ))}
+        {latest && <span style={{ fontSize: 12, color: '#64748b' }}>using data from <strong style={{ color: '#cbd5e1' }}>{latest.dateStr}</strong></span>}
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
