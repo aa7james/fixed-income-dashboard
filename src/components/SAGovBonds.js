@@ -100,6 +100,21 @@ export default function SAGovBonds({ data, instruments }) {
   const benchLabel = bench === 'NCD' ? '1y NCD' : bench === 'T-Bill' ? '1y T-Bill'
     : bench === 'Call' ? 'Call' : '0% (breakeven)';
 
+  // The data row ~1 year after the as-at date (for realised / "what actually happened" columns).
+  const futureRow = useMemo(() => {
+    if (!latest || !allRows.length) return null;
+    const target = new Date(latest.date); target.setFullYear(target.getFullYear() + 1);
+    let best = null, bestDiff = Infinity;
+    for (const r of allRows) {
+      if (r.date <= latest.date) continue;
+      const diff = Math.abs(r.date - target);
+      if (diff < bestDiff) { bestDiff = diff; best = r; }
+    }
+    if (!best) return null;
+    const yrsAfter = (best.date - latest.date) / (1000 * 3600 * 24 * 365);
+    return (yrsAfter >= 0.75 && yrsAfter <= 1.5) ? best : null; // need ~1y of forward data
+  }, [latest, allRows]);
+
   const rows = useMemo(() => {
     if (!latest || !instruments?.length || cashRate == null) return [];
     const now = latest.date; // value the maturities are measured from = the as-at date
@@ -107,7 +122,7 @@ export default function SAGovBonds({ data, instruments }) {
       .filter(i => i.category === 'Government Bonds' && i.coupon != null && i.maturity_date
         && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
       .map(i => ({
-        label: i.display_label || i.name, c: Number(i.coupon) * 100, maturity: i.maturity_date,
+        name: i.name, label: i.display_label || i.name, c: Number(i.coupon) * 100, maturity: i.maturity_date,
         N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365), ytm: Number(latest[i.name]),
       }));
     // Yield curve = every govie point (incl. sub-1y) so N-1 can be interpolated.
@@ -126,13 +141,27 @@ export default function SAGovBonds({ data, instruments }) {
         const totalRet = couponRet + rollRet;       // bond's 1y return, curve unchanged (%)
         const excess = totalRet - cashRate;         // edge over 1y cash (%)
         const beBps = breakevenReprice(yRoll, g.N, g.c, couponRet, price, cashRate); // full reprice (bps)
+        // Realised: what actually happened to the yield over the next ~year
+        let actChange = null, actTR = null, actExcess = null;
+        if (futureRow) {
+          const fv = futureRow[g.name];
+          if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) {
+            const fY = Number(fv);
+            actChange = (fY - g.ytm) * 100;                           // actual yield move (bps)
+            actTR = couponRet + (bondPV(fY, g.N - 1, g.c) / price - 1) * 100; // realised total return (%)
+            actExcess = actTR - cashRate;                            // realised edge over the benchmark (%)
+          }
+        }
         return {
           ...g, mod, modH: modDuration(g.ytm, g.N - 1, g.c),
           yRoll, rollBps: rollDown * 100, couponRet, rollRet, totalRet, excess, beBps,
+          actChange, actTR, actExcess,
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, cashRate]);
+  }, [latest, instruments, cashRate, futureRow]);
+
+  const hasActual = !!futureRow;
 
   // Government yield curve points (incl. sub-1y) as at the selected date.
   const curvePoints = useMemo(() => {
@@ -209,6 +238,8 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Total return</th>
                 <th style={cell()}>Excess vs cash</th>
                 <th style={cell()}>Breakeven</th>
+                {hasActual && <th style={cell({ color: '#f1f5f9', borderLeft: '2px solid #334155' })}>Actual Δyield (1y)</th>}
+                {hasActual && <th style={cell({ color: '#f1f5f9' })}>Actual excess</th>}
               </tr>
             </thead>
             <tbody>
@@ -226,6 +257,16 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ fontWeight: 700 })}>{r.totalRet.toFixed(2)}%</td>
                   <td style={cell({ color: r.excess >= 0 ? '#4ade80' : '#f87171' })}>{r.excess >= 0 ? '+' : ''}{r.excess.toFixed(2)}%</td>
                   <td style={cell({ fontWeight: 700, color: r.beBps >= 20 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>{r.beBps >= 0 ? '+' : ''}{Math.round(r.beBps)}</td>
+                  {hasActual && (
+                    <td style={cell({ fontWeight: 600, borderLeft: '2px solid #334155', color: r.actChange == null ? '#475569' : r.actChange > 0 ? '#f87171' : '#4ade80' })}>
+                      {r.actChange == null ? '—' : `${r.actChange > 0 ? '+' : ''}${Math.round(r.actChange)}`}
+                    </td>
+                  )}
+                  {hasActual && (
+                    <td style={cell({ fontWeight: 700, color: r.actExcess == null ? '#475569' : r.actExcess >= 0 ? '#4ade80' : '#f87171' })}>
+                      {r.actExcess == null ? '—' : `${r.actExcess >= 0 ? '+' : ''}${r.actExcess.toFixed(2)}%`}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -236,6 +277,12 @@ export default function SAGovBonds({ data, instruments }) {
           <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − {benchLabel} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
           <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = the extra yield rise (full reprice at the horizon) at which the bond's total return drops to the {benchLabel}. Bigger = more cushion; negative = already behind cash.
         </p>
+        {hasActual && (
+          <p style={{ fontSize: 12, color: '#cbd5e1', margin: '8px 2px 0', lineHeight: 1.5 }}>
+            <strong style={{ color: '#f1f5f9' }}>Actual Δyield (1y)</strong> = what the bond's yield actually did over the following year (as at {futureRow.dateStr}); red = rose, green = fell.
+            <strong style={{ color: '#f1f5f9' }}> Actual excess</strong> = the bond's realised total return over that year (repriced at the yield that actually occurred) minus the {benchLabel} you'd have locked in ({cashRate?.toFixed(2)}%). This is what would really have happened.
+          </p>
+        )}
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
           Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
         </p>
