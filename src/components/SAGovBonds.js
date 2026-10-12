@@ -1,7 +1,20 @@
 import React, { useMemo, useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import ResizableChart from './ResizableChart';
 
 const cell = (x = {}) => ({ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...x });
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const CurveTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#e2e8f0' }}>
+      <strong>{p.label}</strong><br />
+      {p.mat.toFixed(1)}y · <strong style={{ color: '#38bdf8' }}>{p.ytm.toFixed(2)}%</strong>
+    </div>
+  );
+};
 
 // Dirty price per 100 face, semi-annual. y, c in %; n = years to maturity (fractional ok).
 function bondPV(y, n, c) {
@@ -53,6 +66,7 @@ function breakevenReprice(yRoll, N, c, couponRet, P0, cashRate) {
 
 export default function SAGovBonds({ data, instruments }) {
   const [bench, setBench] = useState('NCD'); // 'NCD' | 'T-Bill'
+  const [showCurve, setShowCurve] = useState(true);
   const allRows = useMemo(() => data?.dataRows || [], [data]);
   const minISO = allRows.length ? iso(allRows[0].date) : '';
   const maxISO = allRows.length ? iso(allRows[allRows.length - 1].date) : '';
@@ -113,6 +127,21 @@ export default function SAGovBonds({ data, instruments }) {
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
   }, [latest, instruments, cashRate]);
+
+  // Government yield curve points (incl. sub-1y) as at the selected date.
+  const curvePoints = useMemo(() => {
+    if (!latest || !instruments?.length) return [];
+    const now = latest.date;
+    return instruments
+      .filter(i => i.category === 'Government Bonds' && i.maturity_date
+        && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
+      .map(i => ({
+        mat: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365),
+        ytm: Number(latest[i.name]), label: i.display_label || i.name,
+      }))
+      .filter(p => p.mat > 0)
+      .sort((a, b) => a.mat - b.mat);
+  }, [latest, instruments]);
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
@@ -197,6 +226,42 @@ export default function SAGovBonds({ data, instruments }) {
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
           Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
         </p>
+      </div>
+
+      <div style={{ marginTop: 16, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+          onClick={() => setShowCurve(v => !v)}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+            Government yield curve <span style={{ color: '#64748b', fontWeight: 400 }}>· {latest.dateStr}</span>
+          </h3>
+          <button onClick={(e) => { e.stopPropagation(); setShowCurve(v => !v); }}
+            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer',
+              border: '1px solid #334155', background: '#0f172a', color: '#94a3b8' }}>
+            {showCurve ? '▾ Minimise' : '▸ Show'}
+          </button>
+        </div>
+        {showCurve && (
+          <div style={{ marginTop: 12 }}>
+            <ResizableChart height={320}>
+              <LineChart data={curvePoints} margin={{ top: 10, right: 24, bottom: 24, left: 8 }}>
+                <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
+                <XAxis type="number" dataKey="mat" domain={[0, 'dataMax']} tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tickFormatter={v => `${v.toFixed(0)}y`} stroke="#475569"
+                  label={{ value: 'Years to maturity', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 12 }} />
+                <YAxis domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tickFormatter={v => `${v.toFixed(1)}%`} stroke="#475569" width={48} />
+                <Tooltip content={<CurveTooltip />} />
+                <ReferenceLine y={cashRate} stroke="#f59e0b" strokeDasharray="5 4"
+                  label={{ value: `1y ${bench} ${cashRate?.toFixed(2)}%`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }} />
+                <Line type="monotone" dataKey="ytm" stroke="#38bdf8" strokeWidth={2}
+                  dot={{ r: 3, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              </LineChart>
+            </ResizableChart>
+            <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0' }}>
+              Nominal govie YTMs by years to maturity, as at {latest.dateStr}. Dashed line = 1y {bench} ({cashRate?.toFixed(2)}%). Drag the bottom‑right corner to resize.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
