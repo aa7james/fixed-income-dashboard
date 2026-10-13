@@ -257,6 +257,8 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
     return { ...o, rlegs: rl, ev, maturity: amount * ev.growth, interest: amount * ev.growth - amount };
   }), [options, resolved, amount]);
 
+  const mmFunds = results.filter(r => r.mmFund);
+
   // Value-over-time points for every option, at monthly steps to the longest horizon.
   const chartData = useMemo(() => {
     const totals = resolved.map(rl => rl.reduce((a, l) => a + (l.months || 0), 0));
@@ -365,6 +367,40 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
         <button onClick={() => { setOptions([...generated, ...manualRef.current]); }} style={btn} title="Recompute the FRA-implied ladders (keeps your manual options)">↻ Reset</button>
       </div>
 
+      {/* Money market funds — quick add/edit, highlighted so it's obvious */}
+      <div style={{ marginBottom: 16, padding: 14, background: 'rgba(124,58,237,0.10)', border: '1.5px solid #7c3aed', borderRadius: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: mmFunds.length ? 12 : 0 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#c4b5fd' }}>💜 Money market funds</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>Add a fund here to compare it against the ladders — projected on the FRA curve, saved to this browser only.</div>
+          </div>
+          <button onClick={addMMFund} style={{ ...btn, background: '#7c3aed', fontWeight: 700, fontSize: 13, padding: '8px 14px' }}>+ Add money market fund</button>
+        </div>
+        {mmFunds.map(r => {
+          const spot = fraEff('Zaronia');
+          const base = (r.mmRate === '' || r.mmRate == null || isNaN(Number(r.mmRate))) ? null : Number(r.mmRate);
+          const avg12 = avgFwd(0, 12);
+          const move = (spot != null && avg12 != null) ? avg12 - spot : 0;
+          return (
+            <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+              <input value={r.name} onChange={e => setOption(r.id, { name: e.target.value })}
+                placeholder="Fund name" style={{ ...inp, flex: '1 1 150px', minWidth: 120, fontWeight: 600, color: '#c4b5fd' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="number" step="0.01" value={r.mmRate} placeholder={spot != null ? spot.toFixed(2) : ''}
+                  onChange={e => setOption(r.id, { mmRate: e.target.value })}
+                  title="today's yield, monthly nominal (NACM)"
+                  style={{ ...inp, width: 82, color: '#c4b5fd' }} />
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>% NACM</span>
+              </div>
+              <span style={{ fontSize: 12, color: '#64748b' }}>
+                {base == null ? 'enter yield →' : <>+{(move * 100).toFixed(0)}bps FRA → <strong style={{ color: '#4ade80' }}>{r.ev.annualised.toFixed(2)}%</strong> eff. p.a.</>}
+              </span>
+              <button onClick={() => removeOption(r.id)} title="remove" style={{ ...btn, padding: '4px 9px', background: '#7f1d1d' }}>×</button>
+            </div>
+          );
+        })}
+      </div>
+
       {/* option cards (collapsible) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <button onClick={() => setCardsOpen(o => !o)} style={{ ...btn, fontWeight: 700 }}>
@@ -466,9 +502,8 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
         })}
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 12 }}>
         <button onClick={addOption} style={{ ...btn, background: '#0ea5e9', fontWeight: 700 }}>+ Add option</button>
-        <button onClick={addMMFund} style={{ ...btn, background: '#7c3aed', fontWeight: 700 }} title="Add a money market fund: enter its yield, projected on the FRA curve">+ Money market fund</button>
       </div>
       </>)}
 
