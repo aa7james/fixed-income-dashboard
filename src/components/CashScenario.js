@@ -169,9 +169,11 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
   };
 
   // A money-market fund: a floating position anchored to the user's current fund
-  // yield that rides the FRA (Zaronia forward) curve. Modelled as 12 one-month
-  // legs, each at fundBase + (forward short rate that month − today's short rate),
-  // so it keeps the fund's spread to Zaronia and re-projects when the curve changes.
+  // yield (monthly nominal, NACM) that rides the FRA (Zaronia forward) curve.
+  // Modelled as 12 one-month legs, each at fundBase + (forward short rate that
+  // month − today's short rate); evalOption accrues each at rate/12 and compounds
+  // monthly -> effective annual. Keeps the fund's spread to Zaronia; re-projects
+  // when the curve changes.
   const resolveMMFund = (o) => {
     const spot = fraEff('Zaronia');
     if (spot == null) return [];
@@ -389,7 +391,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
                   <button onClick={() => removeOption(o.id)} title="remove" style={{ ...btn, padding: '4px 8px', background: '#7f1d1d' }}>×</button>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: '#94a3b8', flex: 1 }}>Today's yield (daily nominal)</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8', flex: 1 }}>Today's yield (monthly nominal, NACM)</span>
                   <input type="number" step="0.01" value={o.mmRate} placeholder={spot != null ? spot.toFixed(2) : ''}
                     onChange={e => setOption(o.id, { mmRate: e.target.value })}
                     style={{ ...inp, width: 72, color: '#c4b5fd' }} />
@@ -397,8 +399,8 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
                 </div>
                 <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
                   {base == null
-                    ? 'Showing market float (no fund yield entered yet) — type the fund’s current daily-nominal yield.'
-                    : <>floats on the FRA curve: {base.toFixed(2)}% + {(move * 100).toFixed(0)}bps (short rate averages {avg12?.toFixed(2)}% vs {spot?.toFixed(2)}% spot over 12m) → <strong style={{ color: '#c4b5fd' }}>{projNom.toFixed(2)}%</strong> nominal</>}
+                    ? 'Showing market float (no fund yield entered yet) — type the fund’s current monthly-nominal (NACM) yield.'
+                    : <>floats on the FRA curve: {base.toFixed(2)}% NACM + {(move * 100).toFixed(0)}bps (short rate averages {avg12?.toFixed(2)}% vs {spot?.toFixed(2)}% spot over 12m) → <strong style={{ color: '#c4b5fd' }}>{projNom.toFixed(2)}%</strong> NACM, compounded monthly to the effective below</>}
                 </div>
                 <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
                   <div>= <strong style={{ color: '#e2e8f0' }}>{zar.format(o.maturity)}</strong> over 12 mo</div>
