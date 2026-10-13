@@ -168,6 +168,24 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
     });
   };
 
+  // A money-market fund: a floating position anchored to the user's current fund
+  // yield that rides the FRA (Zaronia forward) curve. Modelled as 12 one-month
+  // legs, each at fundBase + (forward short rate that month − today's short rate),
+  // so it keeps the fund's spread to Zaronia and re-projects when the curve changes.
+  const resolveMMFund = (o) => {
+    const spot = fraEff('Zaronia');
+    if (spot == null) return [];
+    const raw = Number(o.mmRate);
+    const base = (o.mmRate === '' || o.mmRate == null || isNaN(raw)) ? spot : raw;
+    const legs = [];
+    for (let k = 0; k < 12; k++) {
+      const fwd = avgFwd(k, k + 1);
+      const rate = base + ((fwd == null ? spot : fwd) - spot);
+      legs.push({ months: 1, rate: +rate.toFixed(3) });
+    }
+    return legs;
+  };
+
   const [amount, setAmount] = useState(1000000);
   const [scenInstrument, setScenInstrument] = useState('All'); // 'NCD' | 'T-Bill' | 'All' (all mixes)
 
@@ -225,10 +243,11 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
   }));
   const removeLeg = (id, idx) => setOptions(opts => opts.map(o => o.id === id ? { ...o, legs: o.legs.filter((_, i) => i !== idx) } : o));
   const addOption = () => setOptions(opts => [...opts, { id: nid(), name: `Option ${opts.length + 1}`, legs: [{ label: menu[0]?.label || '', months: 12 }] }]);
+  const addMMFund = () => setOptions(opts => [...opts, { id: nid(), name: 'MM Fund', mmFund: true, mmRate: '', legs: [] }]);
   const removeOption = (id) => setOptions(opts => opts.filter(o => o.id !== id));
 
   // Resolve every option's legs (derive FRA-implied rates) once, and reuse.
-  const resolved = useMemo(() => options.map(o => resolveLegs(o.legs)), [options, menu, fwdBlocks]); // eslint-disable-line
+  const resolved = useMemo(() => options.map(o => o.mmFund ? resolveMMFund(o) : resolveLegs(o.legs)), [options, menu, fwdBlocks]); // eslint-disable-line
 
   const results = useMemo(() => options.map((o, i) => {
     const rl = resolved[i] || [];
@@ -252,6 +271,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
   // Months at which each option rolls (leg boundaries, excluding start and maturity).
   const rollSets = useMemo(() => options.map(o => {
     const rolls = new Set();
+    if (o.mmFund) return rolls; // floating fund: no discrete roll points to mark
     let acc = 0;
     for (let k = 0; k < o.legs.length - 1; k++) { acc += Number(o.legs[k].months) || 0; rolls.add(acc); }
     return rolls;
@@ -354,6 +374,40 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {results.map((o) => {
           const isBest = o.id === bestId;
+          if (o.mmFund) {
+            const spot = fraEff('Zaronia');
+            const base = (o.mmRate === '' || o.mmRate == null || isNaN(Number(o.mmRate))) ? null : Number(o.mmRate);
+            const avg12 = avgFwd(0, 12);
+            const move = (spot != null && avg12 != null) ? avg12 - spot : 0;
+            const projNom = (base != null ? base : (spot || 0)) + move;
+            return (
+              <div key={o.id} style={{ flex: '1 1 300px', minWidth: 280, background: '#0f172a', border: `1px solid ${isBest ? '#4ade80' : '#7c3aed'}`, borderRadius: 10, padding: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+                  <input value={o.name} onChange={e => setOption(o.id, { name: e.target.value })}
+                    style={{ ...inp, flex: 1, fontWeight: 700, fontSize: 14, border: 'none', background: 'transparent', padding: 0, color: isBest ? '#4ade80' : '#c4b5fd' }} />
+                  <span style={{ fontSize: 9, color: '#a78bfa', fontWeight: 700, letterSpacing: 0.5 }}>MM FUND</span>
+                  <button onClick={() => removeOption(o.id)} title="remove" style={{ ...btn, padding: '4px 8px', background: '#7f1d1d' }}>×</button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: '#94a3b8', flex: 1 }}>Today's yield (daily nominal)</span>
+                  <input type="number" step="0.01" value={o.mmRate} placeholder={spot != null ? spot.toFixed(2) : ''}
+                    onChange={e => setOption(o.id, { mmRate: e.target.value })}
+                    style={{ ...inp, width: 72, color: '#c4b5fd' }} />
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>%</span>
+                </div>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+                  {base == null
+                    ? 'Showing market float (no fund yield entered yet) — type the fund’s current daily-nominal yield.'
+                    : <>floats on the FRA curve: {base.toFixed(2)}% + {(move * 100).toFixed(0)}bps (short rate averages {avg12?.toFixed(2)}% vs {spot?.toFixed(2)}% spot over 12m) → <strong style={{ color: '#c4b5fd' }}>{projNom.toFixed(2)}%</strong> nominal</>}
+                </div>
+                <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+                  <div>= <strong style={{ color: '#e2e8f0' }}>{zar.format(o.maturity)}</strong> over 12 mo</div>
+                  <div>Interest: <strong style={{ color: isBest ? '#4ade80' : '#e2e8f0' }}>{zar.format(o.interest)}</strong></div>
+                  <div>Effective: <strong style={{ color: isBest ? '#4ade80' : '#e2e8f0' }}>{o.ev.annualised.toFixed(2)}% p.a.</strong></div>
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={o.id} style={{ flex: '1 1 300px', minWidth: 280, background: '#0f172a', border: `1px solid ${isBest ? '#4ade80' : '#334155'}`, borderRadius: 10, padding: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
@@ -410,8 +464,9 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
         })}
       </div>
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button onClick={addOption} style={{ ...btn, background: '#0ea5e9', fontWeight: 700 }}>+ Add option</button>
+        <button onClick={addMMFund} style={{ ...btn, background: '#7c3aed', fontWeight: 700 }} title="Add a money market fund: enter its yield, projected on the FRA curve">+ Money market fund</button>
       </div>
       </>)}
 
