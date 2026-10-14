@@ -311,6 +311,19 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     return [useLo, useHi];
   }, [filteredSeries, markers, yMin, yMax]);
 
+  // Explicit, evenly-spaced gridlines/labels: 0.10% when zoomed in, else 0.25%
+  // (0.50% as a safety for very wide ranges). Fixes ugly auto-chosen tick steps.
+  const yTicks = useMemo(() => {
+    const [lo, hi] = yDomain;
+    const range = hi - lo;
+    if (!(range > 0)) return undefined;
+    let step = range <= 1.2 ? 0.10 : 0.25;
+    if (range / step > 30) step = 0.5;
+    const ticks = [];
+    for (let v = Math.ceil((lo - 1e-9) / step) * step; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(2));
+    return ticks;
+  }, [yDomain]);
+
   // Spread chart data — compare latest vs first comparison date
   const spreadData = useMemo(() => {
     if (comparisonDates.length === 0 || !latest) return [];
@@ -515,6 +528,9 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                 type="number"
                 name="Yield"
                 domain={yDomain}
+                ticks={yTicks}
+                interval={0}
+                allowDecimals
                 tickFormatter={v => `${v.toFixed(2)}%`}
                 tick={{ fill: '#94a3b8', fontSize: 11 }}
                 width={56}
