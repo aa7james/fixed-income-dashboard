@@ -6,7 +6,7 @@ import {
 import ResizableChart from './ResizableChart';
 import { supabase } from '../utils/supabase';
 import styles from './ChartBuilder.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 const PERIODS = ['1M', '3M', '6M', '1Y', '2Y', '5Y', '10Y', 'ALL', 'Custom'];
 const SERIES_COLORS = ['#38bdf8', '#4ade80', '#fb923c', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#f87171'];
@@ -134,7 +134,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
     buildChartData(data.dataRows, series, period, customFrom, customTo),
     [data.dataRows, series, period, customFrom, customTo]
   );
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(chartData));
 
   const saveChart = async () => {
     if (!chartName.trim() || !series.length) {
@@ -309,6 +309,8 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     tickFormatter={v => `${v}`}
                     domain={yb.domain}
+                    ticks={yb.ticks}
+                    interval={0}
                     allowDataOverflow
                     width={52}
                   />

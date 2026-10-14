@@ -6,7 +6,7 @@ import {
 import ResizableChart from './ResizableChart';
 import CashScenario from './CashScenario';
 import VariableNcdSchedule from './VariableNcdSchedule';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 // Cash instruments by tenor column. Values come from bond_data (latest row)
 // or the manual reference levels (Call / MM) in yield_curve_markers.
@@ -223,7 +223,7 @@ export default function CashTab({ data, instruments }) {
 
   const fmt = (v) => v == null ? '—' : v.toFixed(2);
   const fmtPickup = (v) => v == null || callRate == null ? '' : `${v - callRate >= 0 ? '+' : ''}${((v - callRate) * 100).toFixed(0)}`;
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(fraPath, ['label']));
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
@@ -272,7 +272,7 @@ export default function CashTab({ data, instruments }) {
             <LineChart data={fraPath} margin={{ top: 16, right: 40, left: 0, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
               <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={50} />
-              <YAxis domain={yb.domain} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
+              <YAxis domain={yb.domain} ticks={yb.ticks} interval={0} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => `${v}%`} width={50} />
               <Tooltip content={<FraTooltip />} />
               <Line type="monotone" dataKey="rate" stroke={fraDirty ? '#fbbf24' : '#38bdf8'} strokeWidth={2} dot={{ r: 3, fill: fraDirty ? '#fbbf24' : '#38bdf8' }} connectNulls>
                 <LabelList dataKey="rate" position="top" style={{ fill: fraDirty ? '#fbbf24' : '#38bdf8', fontSize: 9 }} formatter={v => `${v}%`} />

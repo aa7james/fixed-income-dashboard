@@ -6,7 +6,7 @@ import {
 import ResizableChart from './ResizableChart';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 const SA   = 'SA Generic 10 year';
 const US   = 'US Generic 10 year';
@@ -60,7 +60,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
   }, [dataRows, period]);
 
   const hasAnyData = chartData.some(p => p.currency != null || p.credit != null);
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(chartData, ['dateStr']).concat((chartData || []).map(r => (Number(r.credit) || 0) + (Number(r.currency) || 0))));
   if (!hasAnyData) return null;
 
   return (
@@ -113,6 +113,8 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
           />
           <YAxis
             domain={yb.domain}
+            ticks={yb.ticks}
+            interval={0}
             allowDataOverflow
             tickFormatter={v => `${v}`}
             tick={{ fill: '#94a3b8', fontSize: 11 }}
@@ -144,6 +146,8 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
           />
           <YAxis
             domain={yb.domain}
+            ticks={yb.ticks}
+            interval={0}
             allowDataOverflow
             tickFormatter={v => `${v}`}
             tick={{ fill: '#94a3b8', fontSize: 11 }}

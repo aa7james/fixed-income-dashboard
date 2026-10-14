@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import ResizableChart from './ResizableChart';
 import styles from './InflationLinkedBonds.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 // TIPS real-yield tenors paired with their nominal Treasury counterpart.
 const TIPS_TENORS = [
@@ -65,7 +65,7 @@ export default function USInflationLinked({ data }) {
   }, [latest]);
 
   const hasData = points.some(p => p.real != null);
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(points, undefined, ['implied', 'nominal', 'real']).concat([0]));
   if (!hasData) return null;
 
   return (
@@ -99,7 +99,9 @@ export default function USInflationLinked({ data }) {
             label={{ value: 'Tenor', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
           />
           <YAxis
-            domain={[yb.yMin !== '' ? +yb.yMin : 0, yb.yMax !== '' ? +yb.yMax : 'auto']}
+            domain={yb.domain}
+            ticks={yb.ticks}
+            interval={0}
             allowDataOverflow
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}

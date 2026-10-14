@@ -6,7 +6,7 @@ import {
 import ResizableChart from './ResizableChart';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
@@ -40,7 +40,7 @@ export default function InflationLinkedBonds() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(rows, undefined, ['implied_inflation', 'nominal_yield', 'real_yield']).concat([0]));
 
   useEffect(() => {
     loadYieldCurveInterpolated()
@@ -104,7 +104,9 @@ export default function InflationLinkedBonds() {
           />
 
           <YAxis
-            domain={[yb.yMin !== '' ? +yb.yMin : 0, yb.yMax !== '' ? +yb.yMax : 'auto']}
+            domain={yb.domain}
+            ticks={yb.ticks}
+            interval={0}
             allowDataOverflow
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}

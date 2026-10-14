@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { supabase } from '../utils/supabase';
 import ResizableChart from './ResizableChart';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 const BENCHMARK = 'ALBI';
 const inp = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', padding: '6px 8px', fontSize: 13 };
@@ -52,7 +52,6 @@ export default function ModelPortfolio({ data, instruments }) {
   const [startDate, setStartDate] = useState('');
   const [holdings, setHoldings] = useState([]); // [{instrument, weight, duration}]
   const [status, setStatus] = useState('');
-  const yb = useYAxisBounds();
 
   const instNames = useMemo(() => (instruments || []).map(i => i.name).sort(), [instruments]);
   const dataRows = useMemo(() => data?.dataRows || [], [data]);
@@ -124,6 +123,8 @@ export default function ModelPortfolio({ data, instruments }) {
     }
     return series;
   }, [dataRows, holdings, startDate, totW]);
+
+  const yb = useYAxisBounds('Y-axis', flatY(perf, ['date']));
 
   const stats = useMemo(() => {
     if (!perf || perf.length < 2) return null;
@@ -219,7 +220,7 @@ export default function ModelPortfolio({ data, instruments }) {
             <LineChart data={perf} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
               <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 9 }} interval="preserveStartEnd" minTickGap={40} />
-              <YAxis domain={yb.domain} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={48} />
+              <YAxis domain={yb.domain} ticks={yb.ticks} interval={0} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={48} />
               <Tooltip content={<PerfTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Line type="monotone" dataKey="Portfolio" stroke={colors[0]} strokeWidth={2} dot={false} isAnimationActive={false} />

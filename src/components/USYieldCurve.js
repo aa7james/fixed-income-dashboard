@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import ResizableChart from './ResizableChart';
 import styles from './YieldCurve.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, niceTicks } from './useYAxisBounds';
 
 // US on-the-run benchmarks (constant-maturity generics), plotted at NOMINAL
 // tenor. Bills + notes merged into one curve. 2M/4M omitted (no generic).
@@ -169,6 +169,7 @@ export default function USYieldCurve({ data }) {
     yb.yMin !== '' ? +yb.yMin : autoLo,
     yb.yMax !== '' ? +yb.yMax : autoHi,
   ];
+  const yTicks = niceTicks(yDomain[0], yDomain[1])?.ticks;
 
   const togglePreset = (label) =>
     setSelectedPresets(prev => prev.includes(label) ? prev.filter(p => p !== label) : [...prev.slice(0, 3), label]);
@@ -238,6 +239,9 @@ export default function USYieldCurve({ data }) {
               type="number"
               name="Yield"
               domain={yDomain}
+              ticks={yTicks}
+              interval={0}
+              allowDecimals
               tickFormatter={v => `${v.toFixed(2)}%`}
               tick={{ fill: '#94a3b8', fontSize: 11 }}
               width={56}

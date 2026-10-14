@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import ResizableChart from './ResizableChart';
 import styles from './MarketPricing.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 // Parse "NxM" or "N×M" — returns end month for X-axis positioning
 function tenorEndMonth(name) {
@@ -88,7 +88,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, isInPack, onTogglePack }) {
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(data, undefined, ['rate']).concat(flatY(compData || [], undefined, ['rate'])));
   if (!data.length) return null;
 
   // Overlay a comparison-date curve on the same axes (merge by month).
@@ -164,6 +164,8 @@ function FraCurveChart({ title, subtitle, data, compData, compLabel, packKey, is
           />
           <YAxis
             domain={yb.domain}
+            ticks={yb.ticks}
+            interval={0}
             allowDataOverflow
             tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={v => `${v}%`}

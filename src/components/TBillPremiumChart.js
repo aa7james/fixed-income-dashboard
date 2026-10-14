@@ -6,7 +6,7 @@ import {
 import ResizableChart from './ResizableChart';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 const TENORS = [
   { label: '3M', tbill: '3m T-Bill', ncd: '3m Fixed Rate NCD' },
@@ -61,7 +61,7 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
   }, [dataRows, latest]);
 
   const hasAnyData = chartData.some(p => COMPARISONS.some(c => p[c.key] != null));
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(chartData));
   if (!hasAnyData) return null;
 
   return (
@@ -86,6 +86,8 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
           <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} />
           <YAxis
             domain={yb.domain}
+            ticks={yb.ticks}
+            interval={0}
             allowDataOverflow
             tickFormatter={v => `${v.toFixed(2)}%`}
             tick={{ fill: '#94a3b8', fontSize: 11 }}

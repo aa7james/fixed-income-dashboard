@@ -7,7 +7,7 @@ import ResizableChart from './ResizableChart';
 import { supabase } from '../utils/supabase';
 import AddToPackButton from './AddToPackButton';
 import TBillPremiumChart from './TBillPremiumChart';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 import RiskPremiumChart from './RiskPremiumChart';
 import styles from './MyCharts.module.css';
 
@@ -79,7 +79,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
     [data.dataRows, chart.series, period, customFrom, customTo]
   );
   const isHidden = (key) => hiddenKeys && hiddenKeys.has(key);
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(chartData));
 
   return (
     <>
@@ -101,6 +101,8 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
           tick={{ fill: '#64748b', fontSize: 10 }}
           width={52}
           domain={yb.domain}
+          ticks={yb.ticks}
+          interval={0}
           allowDataOverflow
           tickFormatter={v => v}
         />

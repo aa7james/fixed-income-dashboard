@@ -3,7 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import ResizableChart from './ResizableChart';
-import { useYAxisBounds } from './useYAxisBounds';
+import { useYAxisBounds, flatY } from './useYAxisBounds';
 
 // User-built cash scenario comparator: add as many options as you like, each
 // built from one or more legs (a "roll" is just an extra leg with the rate you
@@ -335,7 +335,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
     return new Set(sel.map(r => r.id));
   }, [eligible, filterMode, topN, minYield]);
   const isManual = (id) => !String(id).startsWith('gen_');
-  const yb = useYAxisBounds();
+  const yb = useYAxisBounds('Y-axis', flatY(chartData, ['month']));
 
   // custom instrument form
   const [cName, setCName] = useState(''); const [cRate, setCRate] = useState(''); const [cMonths, setCMonths] = useState('');
@@ -538,7 +538,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
-              <YAxis domain={[yb.yMin !== '' ? +yb.yMin : 'dataMin', yb.yMax !== '' ? +yb.yMax : 'dataMax']} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={64}
+              <YAxis domain={yb.domain} ticks={yb.ticks} interval={0} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={64}
                 allowDecimals={false} tickFormatter={v => `R${(v / 1000).toFixed(1)}k`} />
               <Tooltip content={renderTip} />
               {options.map((o, i) => {
