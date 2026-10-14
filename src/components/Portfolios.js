@@ -1,10 +1,13 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
 
 const ALBI_DUR = 6.33; // benchmark reference (ALBI modified duration)
+// In-memory only: survives tab switches within the app, but is wiped on a page
+// refresh / new session — so a refresh always re-prompts for the password.
+let SESSION = null;
 const TYPE_COLOR = { Bond: '#38bdf8', 'RSA T-Bill': '#4ade80', NCD: '#fbbf24', 'Money Market': '#a78bfa' };
 
 function bondPV(y, n, c) {
@@ -78,8 +81,8 @@ export default function Portfolios({ data, instruments }) {
   const shortRate = latest ? (Number(latest['Zaronia']) || Number(latest['12m Fixed Rate NCD']) || 7.1) : 7.1;
 
   const [pw, setPw] = useState('');
-  const [authed, setAuthed] = useState(false);
-  const [payload, setPayload] = useState(null);
+  const [authed, setAuthed] = useState(() => !!SESSION);
+  const [payload, setPayload] = useState(() => SESSION);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [fund, setFund] = useState('');
@@ -93,17 +96,13 @@ export default function Portfolios({ data, instruments }) {
       if (r.status === 401) { setErr('Incorrect password.'); setLoading(false); return; }
       if (!r.ok) { setErr(`Server error (${r.status}). Is the portfolios function configured in Vercel?`); setLoading(false); return; }
       const j = await r.json();
-      setPayload(j); setAuthed(true);
-      try { sessionStorage.setItem('dashPw', p); } catch { /* ignore */ }
+      SESSION = j;              // in-memory only — cleared on refresh
+      setPayload(j); setAuthed(true); setPw('');
     } catch { setErr('Could not reach the portfolios server.'); }
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    let saved = '';
-    try { saved = sessionStorage.getItem('dashPw') || ''; } catch { /* ignore */ }
-    if (saved) { setPw(saved); unlock(saved); }
-  }, [unlock]);
+  const lock = () => { SESSION = null; setAuthed(false); setPayload(null); setPw(''); };
 
   const rowByDate = useCallback((iso) => {
     if (!dataRows.length) return null;
@@ -188,6 +187,8 @@ export default function Portfolios({ data, instruments }) {
           <select value={curSnap.id} onChange={e => setSnapId(e.target.value)} style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }}>
             {[...snaps].reverse().map(s => <option key={s.id} value={s.id}>{s.date}</option>)}
           </select>
+          <button onClick={lock} title="Lock the portfolios (re-asks for the password)"
+            style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#94a3b8', cursor: 'pointer' }}>🔒 Lock</button>
         </div>
       </div>
 
