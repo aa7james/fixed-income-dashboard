@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
@@ -30,6 +30,36 @@ const ALBI = [
   ['R2048', 'RSA', 8.750, '2048-02-28', 465462],
   ['R2053', 'RSA', 11.625, '2053-03-31', 116019],
 ];
+
+const LS_KEY = 'albiConstituents';
+// Parse an FTSE/JSE ALBI constituent CSV into [code, issuer, coupon, maturity, weight] rows.
+function parseAlbiCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const hi = lines.findIndex(l => l.startsWith('EffectiveDate,'));
+  if (hi < 0) throw new Error('Not an ALBI constituent file (missing header row).');
+  const cols = lines[hi].split(',').map(s => s.trim());
+  const col = (name) => cols.indexOf(name);
+  const iCode = col('InstrumentCode'), iIssuer = col('Issuer'), iCoupon = col('Coupon'), iMat = col('MaturityDate'), iW = col('Weight'), iEff = col('EffectiveDate');
+  if ([iCode, iIssuer, iCoupon, iMat, iW].some(x => x < 0)) throw new Error('Unexpected columns in the file.');
+  const rows = []; let asAt = '';
+  for (let r = hi + 1; r < lines.length; r++) {
+    const line = lines[r].trim();
+    if (!line || /^X+$/.test(line)) continue;
+    const f = line.split(',');
+    const code = (f[iCode] || '').trim();
+    const coupon = parseFloat(f[iCoupon]);
+    const mat = (f[iMat] || '').trim().replace(/\//g, '-');
+    const weight = parseFloat((f[iW] || '').replace(/[^0-9.-]/g, ''));
+    if (!code || !isFinite(coupon) || !/^\d{4}-\d{2}-\d{2}$/.test(mat) || !isFinite(weight) || weight <= 0) continue;
+    const iss = (f[iIssuer] || '').toUpperCase();
+    const issuer = iss.includes('REPUBLIC OF SOUTH AFRICA') ? 'RSA'
+      : iss.includes('ESKOM') ? 'Eskom' : iss.includes('TRANSNET') ? 'Transnet' : (f[iIssuer] || 'Other').trim();
+    rows.push([code, issuer, coupon, mat, weight]);
+    if (!asAt && iEff >= 0 && f[iEff]) asAt = f[iEff].trim().replace(/\//g, '-');
+  }
+  if (!rows.length) throw new Error('No constituents found in the file.');
+  return { rows, asAt: asAt || 'uploaded' };
+}
 
 function bondPV(y, n, c) {
   if (n <= 0) return 100;
@@ -67,6 +97,33 @@ const metricCard = (label, value, sub) => (
 export default function AlbiIndex({ data, instruments }) {
   const latest = data?.dataRows?.length ? data.dataRows[data.dataRows.length - 1] : null;
 
+  const [store, setStore] = useState(() => {
+    try { const s = JSON.parse(localStorage.getItem(LS_KEY)); if (s?.rows?.length) return s; } catch { /* ignore */ }
+    return { rows: ALBI, asAt: AS_AT };
+  });
+  const [uploadMsg, setUploadMsg] = useState('');
+  const onUpload = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = parseAlbiCsv(String(reader.result));
+        setStore(parsed);
+        try { localStorage.setItem(LS_KEY, JSON.stringify(parsed)); } catch { /* ignore */ }
+        setUploadMsg(`Loaded ${parsed.rows.length} constituents (as at ${parsed.asAt}).`);
+      } catch (err) { setUploadMsg(`Could not read file: ${err.message}`); }
+    };
+    reader.readAsText(file);
+  };
+  const resetBuiltIn = () => {
+    setStore({ rows: ALBI, asAt: AS_AT });
+    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
+    setUploadMsg('Reverted to the built-in constituents.');
+  };
+  const custom = store.asAt !== AS_AT || store.rows !== ALBI;
+
   const { rows, chartRows, metrics, anyProxy } = useMemo(() => {
     const now = new Date();
     const yrs = (d) => (new Date(d) - now) / (1000 * 3600 * 24 * 365);
@@ -81,9 +138,9 @@ export default function AlbiIndex({ data, instruments }) {
       if (latest && i.display_label && sane(latest[i.name])) yieldByCode[i.display_label] = Number(latest[i.name]);
     });
 
-    const total = ALBI.reduce((a, r) => a + r[4], 0);
+    const total = store.rows.reduce((a, r) => a + r[4], 0);
     let proxy = false;
-    const rws = ALBI.map(([code, issuer, c, mat, w]) => {
+    const rws = store.rows.map(([code, issuer, c, mat, w]) => {
       const N = yrs(mat);
       const wt = (w / total) * 100;
       let y = yieldByCode[code];
@@ -106,7 +163,7 @@ export default function AlbiIndex({ data, instruments }) {
     // Chart shows government bonds only; metrics still cover the whole index.
     const chartRows = rws.filter(r => r.issuer === 'RSA');
     return { rows: rws, chartRows, metrics, anyProxy: proxy };
-  }, [latest, instruments]);
+  }, [latest, instruments, store]);
 
   if (!latest) return null;
   if (!rows.length) return <div style={{ color: '#64748b', fontSize: 13 }}>ALBI: no live yields available yet.</div>;
@@ -130,11 +187,24 @@ export default function AlbiIndex({ data, instruments }) {
 
   return (
     <div style={{ marginTop: 20, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
-      <div style={{ marginBottom: 12 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>ALBI index — weights on the yield curve</h3>
-        <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>
-          FTSE/JSE All Bond Index government constituents (as at {AS_AT}): weight by tenor (bars) behind the yield curve (line). Yields live as at {latest.dateStr}. Metrics below cover the full index.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>ALBI index — weights on the yield curve</h3>
+          <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>
+            FTSE/JSE All Bond Index government constituents (as at {store.asAt}{custom ? ' · uploaded' : ''}): weight by tenor (bars) behind the yield curve (line). Yields live as at {latest.dateStr}. Metrics below cover the full index.
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <label style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', background: '#0ea5e9', color: '#fff' }}>
+              ⬆ Update from CSV
+              <input type="file" accept=".csv,text/csv" onChange={onUpload} style={{ display: 'none' }} />
+            </label>
+            {custom && <button onClick={resetBuiltIn} title="Revert to the built-in constituents"
+              style={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: '1px solid #334155', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>↺ Built‑in</button>}
+          </div>
+          {uploadMsg && <span style={{ fontSize: 10, color: uploadMsg.startsWith('Could not') ? '#f87171' : '#4ade80' }}>{uploadMsg}</span>}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
