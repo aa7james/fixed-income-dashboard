@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart, LabelList } from 'recharts';
+import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
@@ -8,18 +8,12 @@ const ALBI_DUR = 6.33; // benchmark reference (ALBI modified duration)
 // In-memory only: survives tab switches within the app, but is wiped on a page
 // refresh / new session — so a refresh always re-prompts for the password.
 let SESSION = null;
-const TYPE_COLOR = { Bond: '#38bdf8', 'RSA T-Bill': '#4ade80', NCD: '#fbbf24', 'Money Market': '#a78bfa' };
 
-// Vertical bond-code label drawn up from the bar's base (skips the curve rows).
+// Vertical bond-code label up from the bar's base — only where there's an actual bar (held bonds).
 const BarLabel = ({ x, y, width, height, value }) => {
-  if (x == null || width == null || height == null || !value) return null;
+  if (x == null || width == null || !(height > 2) || !value) return null;
   const cx = x + width / 2, cy = y + height - 4;
-  return <text x={cx} y={cy} transform={`rotate(-90, ${cx}, ${cy})`} textAnchor="start" fill="#bae6fd" fontSize={9} fontWeight={600}>{value}</text>;
-};
-// Bond-code label above each holding dot.
-const DotLabel = ({ x, y, value }) => {
-  if (x == null || y == null || !value) return null;
-  return <text x={x} y={y - 9} textAnchor="middle" fill="#7dd3fc" fontSize={9} fontWeight={600}>{value}</text>;
+  return <text x={cx} y={cy} transform={`rotate(-90, ${cx}, ${cy})`} textAnchor="start" fill="#e0f2fe" fontSize={9} fontWeight={700}>{value}</text>;
 };
 
 function bondPV(y, n, c) {
@@ -168,32 +162,38 @@ export default function Portfolios({ data, instruments }) {
   if (!active) return <div style={{ color: '#64748b' }}>No holdings found.</div>;
   const m = active.metrics;
   const hasItems = active.items.length > 0;
-  const wTicks = hasItems ? niceTicks(0, Math.max(...active.items.map(i => i.wt))) : null;
-  // Full government yield curve at the snapshot date, drawn behind the fund's bonds.
+  // Full government curve at the snapshot date: every govie, flagged + weighted if the fund holds it.
   const prow = rowByDate(curSnap.date);
   const cNow = new Date(curSnap.date);
   const cYrs = (d) => (new Date(d) - cNow) / (1000 * 3600 * 24 * 365);
-  const govCurve = (instruments || [])
+  const heldByCode = {};
+  active.items.forEach(it => { heldByCode[it.label] = it; });
+  const chartData = (instruments || [])
     .filter(i => i.category === 'Government Bonds' && i.maturity_date && prow && Number(prow[i.name]) > 0.2 && Number(prow[i.name]) < 40)
-    .map(i => ({ N: cYrs(i.maturity_date), curveY: Number(prow[i.name]) })).filter(p => p.N > 0).sort((a, b) => a.N - b.N);
-  const chartData = [...govCurve, ...active.items].sort((a, b) => a.N - b.N);
+    .map(i => {
+      const code = i.display_label || i.name;
+      const h = heldByCode[code];
+      return { N: cYrs(i.maturity_date), code, curveY: Number(prow[i.name]), held: !!h, wt: h ? h.wt : undefined, mv: h ? h.mv : undefined, dur: h ? h.dur : undefined };
+    }).filter(p => p.N > 0).sort((a, b) => a.N - b.N);
   const maxN = Math.max(1, ...chartData.map(d => d.N));
-  const allY = [...active.items.map(i => i.y), ...govCurve.map(p => p.curveY)];
+  const allY = chartData.map(d => d.curveY);
   const yld = allY.length ? niceTicks(Math.min(...allY) - 0.3, Math.max(...allY) + 0.3) : null;
+  const heldWts = chartData.filter(d => d.held && d.wt != null).map(d => d.wt);
+  const wTicks = heldWts.length ? niceTicks(0, Math.max(...heldWts)) : null;
   const durTicks = niceTicks(Math.min(0, ...fundSeries.map(s => s.modDur)) , Math.max(...fundSeries.map(s => s.modDur)) + 0.3);
   const histFmt = makeDateFmt(dateSpanDays(fundSeries, 'date'));
   const durColor = m.modDur < ALBI_DUR ? '#fbbf24' : '#4ade80';
 
   const Tip = ({ active: a, payload: p }) => {
     if (!a || !p?.length) return null;
-    const d = (p.find(x => x.payload?.kind) || p[0]).payload;
+    const d = (p.find(x => x.payload?.held) || p[0]).payload;
     const box = { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#e2e8f0' };
-    if (!d.kind) return <div style={box}>Govt curve<br />{d.N?.toFixed(1)}y · <strong style={{ color: '#38bdf8' }}>{d.curveY?.toFixed(2)}%</strong></div>;
+    if (!d.held) return <div style={box}><strong>{d.code}</strong> <span style={{ color: '#64748b' }}>· not held</span><br />{d.N?.toFixed(1)}y · <strong style={{ color: '#94a3b8' }}>{d.curveY?.toFixed(2)}%</strong></div>;
     return (
       <div style={box}>
-        <strong>{d.label}</strong> <span style={{ color: TYPE_COLOR[d.kind] }}>{d.kind}</span><br />
-        {d.N.toFixed(2)}y · yield <strong>{d.y?.toFixed(2)}%</strong> · dur {d.dur?.toFixed(2)}<br />
-        weight <strong>{d.wt.toFixed(1)}%</strong> · MV R{(d.mv / 1e6).toFixed(1)}m
+        <strong style={{ color: '#38bdf8' }}>{d.code}</strong> <span style={{ color: '#4ade80' }}>· held</span><br />
+        {d.N.toFixed(2)}y · yield <strong>{d.curveY?.toFixed(2)}%</strong> · dur {d.dur?.toFixed(2)}<br />
+        weight <strong>{d.wt?.toFixed(1)}%</strong> · MV R{(d.mv / 1e6).toFixed(1)}m
       </div>
     );
   };
@@ -241,20 +241,29 @@ export default function Portfolios({ data, instruments }) {
             <YAxis yAxisId="wt" orientation="right" domain={wTicks?.domain} ticks={wTicks?.ticks} interval={0} tick={{ fill: '#a78bfa', fontSize: 11 }}
               tickFormatter={v => `${v}%`} stroke="#475569" width={46} label={{ value: 'Weight', angle: 90, position: 'insideRight', fill: '#a78bfa', fontSize: 11 }} />
             <Tooltip content={<Tip />} />
-            <Line yAxisId="yield" type="monotone" dataKey="curveY" name="Govt curve" stroke="#64748b" strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
-            <Bar yAxisId="wt" dataKey="wt" name="Weight" barSize={14} isAnimationActive={false}>
-              {chartData.map((d, i) => <Cell key={i} fill={d.kind ? (TYPE_COLOR[d.kind] || '#64748b') : 'transparent'} fillOpacity={0.5} />)}
-              <LabelList dataKey="label" content={BarLabel} />
+            <Line yAxisId="yield" type="monotone" dataKey="curveY" name="Govt curve" stroke="#475569" strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
+            <Bar yAxisId="wt" dataKey="wt" name="Weight" barSize={14} fill="#38bdf8" fillOpacity={0.5} isAnimationActive={false}>
+              <LabelList dataKey="code" content={BarLabel} />
             </Bar>
-            <Scatter yAxisId="yield" dataKey="y" name="Holding" isAnimationActive={false}>
-              {chartData.map((d, i) => <Cell key={i} fill={d.kind ? (TYPE_COLOR[d.kind] || '#e2e8f0') : 'transparent'} />)}
-              <LabelList dataKey="label" content={DotLabel} />
+            <Scatter yAxisId="yield" dataKey="curveY" name="Govie" isAnimationActive={false}
+              shape={(props) => {
+                const { cx, cy, payload } = props;
+                if (cx == null || cy == null) return null;
+                return <circle cx={cx} cy={cy} r={payload.held ? 5 : 3} fill={payload.held ? '#38bdf8' : '#64748b'} stroke={payload.held ? '#0f172a' : 'none'} strokeWidth={payload.held ? 1.5 : 0} />;
+              }}>
+              <LabelList dataKey="code" content={(props) => {
+                const d = chartData[props.index];
+                if (props.x == null || props.y == null || !d) return null;
+                return <text x={props.x} y={props.y - 9} textAnchor="middle" fill={d.held ? '#7dd3fc' : '#64748b'} fontSize={d.held ? 10 : 8.5} fontWeight={d.held ? 700 : 400}>{d.code}</text>;
+              }} />
             </Scatter>
           </ComposedChart>
         </ResizableChart>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, marginTop: 6 }}>
-          <span style={{ color: '#64748b' }}>— Govt curve</span>
-          {[...new Set(active.items.map(i => i.kind))].map(k => <span key={k} style={{ color: TYPE_COLOR[k] || '#94a3b8' }}>● {k}</span>)}
+          <span style={{ color: '#475569' }}>— Govt curve</span>
+          <span style={{ color: '#38bdf8', fontWeight: 700 }}>● Held</span>
+          <span style={{ color: '#64748b' }}>● Not held</span>
+          <span style={{ color: '#38bdf8' }}>▮ Weight (held)</span>
         </div>
 
         {fundSeries.length > 1 && (
