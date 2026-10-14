@@ -7,6 +7,7 @@ import {
 import ResizableChart from './ResizableChart';
 import styles from './YieldCurve.module.css';
 import { useYAxisBounds, niceTicks } from './useYAxisBounds';
+import { fmtTenor, tenorTicks } from './axisFormat';
 
 // US on-the-run benchmarks (constant-maturity generics), plotted at NOMINAL
 // tenor. Bills + notes merged into one curve. 2M/4M omitted (no generic).
@@ -32,11 +33,6 @@ const TENOR_RANGES = [
   { label: 'Medium Term', max: 10,   description: '0 – 10 years' },
   { label: 'Full Curve',  max: null, description: 'All maturities' },
 ];
-
-function formatTenor(x) {
-  if (x < 1) return `${Math.round(x * 12)}m`;
-  return `${x}y`;
-}
 
 function nearestRow(dataRows, targetDate) {
   if (!dataRows.length) return null;
@@ -100,7 +96,7 @@ function buildCurve(row) {
   for (const [name, tenor] of Object.entries(US_TENORS)) {
     const y = row?.[name];
     if (y == null) continue;
-    pts.push({ x: tenor, y: +y.toFixed(2), tenorLabel: formatTenor(tenor), name });
+    pts.push({ x: tenor, y: +y.toFixed(2), tenorLabel: fmtTenor(tenor), name });
   }
   pts.sort((a, b) => a.x - b.x);
   return pts;
@@ -230,7 +226,8 @@ export default function USYieldCurve({ data }) {
               type="number"
               name="Tenor"
               domain={[0, xMax]}
-              tickFormatter={formatTenor}
+              ticks={tenorTicks(xMax)}
+              tickFormatter={fmtTenor}
               label={{ value: 'Tenor', position: 'insideBottom', offset: -14, fill: '#475569', fontSize: 12 }}
               tick={{ fill: '#94a3b8', fontSize: 11 }}
             />

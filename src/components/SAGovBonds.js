@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
+import { fmtTenor, tenorTicks } from './axisFormat';
 
 const cell = (x = {}) => ({ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...x });
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -320,7 +321,8 @@ export default function SAGovBonds({ data, instruments }) {
               <LineChart data={curvePoints} margin={{ top: 10, right: 24, bottom: 24, left: 8 }}>
                 <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
                 <XAxis type="number" dataKey="mat" domain={[0, 'dataMax']} tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickFormatter={v => `${v.toFixed(0)}y`} stroke="#475569"
+                  ticks={tenorTicks(curvePoints.length ? Math.max(...curvePoints.map(p => p.mat)) : 30)}
+                  tickFormatter={fmtTenor} stroke="#475569"
                   label={{ value: 'Years to maturity', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 12 }} />
                 <YAxis domain={curveY.domain} ticks={curveY.ticks} interval={0} allowDecimals tick={{ fill: '#94a3b8', fontSize: 11 }}
                   tickFormatter={v => `${v.toFixed(2)}%`} stroke="#475569" width={52} />

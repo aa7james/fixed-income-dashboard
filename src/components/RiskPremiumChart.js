@@ -7,6 +7,7 @@ import ResizableChart from './ResizableChart';
 import AddToPackButton from './AddToPackButton';
 import styles from './YieldCurve.module.css';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
+import { makeDateFmt, dateSpanDays } from './axisFormat';
 
 const SA   = 'SA Generic 10 year';
 const US   = 'US Generic 10 year';
@@ -61,6 +62,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
 
   const hasAnyData = chartData.some(p => p.currency != null || p.credit != null);
   const yb = useYAxisBounds('Y-axis', flatY(chartData, ['dateStr']).concat((chartData || []).map(r => (Number(r.credit) || 0) + (Number(r.currency) || 0))));
+  const dateFmt = makeDateFmt(dateSpanDays(chartData, 'dateStr'));
   if (!hasAnyData) return null;
 
   return (
@@ -106,10 +108,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
             tick={{ fill: '#94a3b8', fontSize: 9 }}
             interval="preserveStartEnd"
             minTickGap={40}
-            tickFormatter={d => {
-              const parts = d.split('/');
-              return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
-            }}
+            tickFormatter={dateFmt}
           />
           <YAxis
             domain={yb.domain}
@@ -139,10 +138,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
             tick={{ fill: '#94a3b8', fontSize: 9 }}
             interval="preserveStartEnd"
             minTickGap={40}
-            tickFormatter={d => {
-              const parts = d.split('/');
-              return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
-            }}
+            tickFormatter={dateFmt}
           />
           <YAxis
             domain={yb.domain}

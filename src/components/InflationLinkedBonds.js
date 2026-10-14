@@ -7,6 +7,7 @@ import ResizableChart from './ResizableChart';
 import { loadYieldCurveInterpolated } from '../utils/supabase';
 import styles from './InflationLinkedBonds.module.css';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
+import { fmtTenor } from './axisFormat';
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
@@ -98,7 +99,7 @@ export default function InflationLinkedBonds() {
             type="number"
             domain={['dataMin', 'dataMax']}
             ticks={ticks}
-            tickFormatter={v => `${Math.round(v)}y`}
+            tickFormatter={fmtTenor}
             tick={{ fill: '#64748b', fontSize: 10 }}
             label={{ value: 'Years to Maturity', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
           />

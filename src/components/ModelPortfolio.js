@@ -5,6 +5,7 @@ import {
 import { supabase } from '../utils/supabase';
 import ResizableChart from './ResizableChart';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
+import { makeDateFmt, dateSpanDays } from './axisFormat';
 
 const BENCHMARK = 'ALBI';
 const inp = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', padding: '6px 8px', fontSize: 13 };
@@ -125,6 +126,7 @@ export default function ModelPortfolio({ data, instruments }) {
   }, [dataRows, holdings, startDate, totW]);
 
   const yb = useYAxisBounds('Y-axis', flatY(perf, ['date']));
+  const dateFmt = makeDateFmt(dateSpanDays(perf, 'date'));
 
   const stats = useMemo(() => {
     if (!perf || perf.length < 2) return null;
@@ -219,7 +221,7 @@ export default function ModelPortfolio({ data, instruments }) {
           <ResizableChart width="100%" height={460}>
             <LineChart data={perf} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" />
-              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 9 }} interval="preserveStartEnd" minTickGap={40} />
+              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 9 }} interval="preserveStartEnd" minTickGap={40} tickFormatter={dateFmt} />
               <YAxis domain={yb.domain} ticks={yb.ticks} interval={0} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={48} />
               <Tooltip content={<PerfTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />

@@ -6,6 +6,7 @@ import {
 import ResizableChart from './ResizableChart';
 import styles from './InflationLinkedBonds.module.css';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
+import { fmtTenor } from './axisFormat';
 
 // TIPS real-yield tenors paired with their nominal Treasury counterpart.
 const TIPS_TENORS = [
@@ -94,7 +95,7 @@ export default function USInflationLinked({ data }) {
             type="number"
             domain={['dataMin', 'dataMax']}
             ticks={points.map(p => p.tenor)}
-            tickFormatter={v => `${v}y`}
+            tickFormatter={fmtTenor}
             tick={{ fill: '#64748b', fontSize: 10 }}
             label={{ value: 'Tenor', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
           />

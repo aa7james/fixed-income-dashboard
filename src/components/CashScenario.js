@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
+import { fmtMonths } from './axisFormat';
 
 // User-built cash scenario comparator: add as many options as you like, each
 // built from one or more legs (a "roll" is just an extra leg with the rate you
@@ -537,7 +538,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
           <ResizableChart width="100%" height={640}>
             <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={m => `${m}m`} />
+              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={fmtMonths} />
               <YAxis domain={yb.domain} ticks={yb.ticks} interval={0} allowDataOverflow tick={{ fill: '#64748b', fontSize: 10 }} width={64}
                 allowDecimals={false} tickFormatter={v => `R${(v / 1000).toFixed(1)}k`} />
               <Tooltip content={renderTip} />

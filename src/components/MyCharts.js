@@ -8,6 +8,7 @@ import { supabase } from '../utils/supabase';
 import AddToPackButton from './AddToPackButton';
 import TBillPremiumChart from './TBillPremiumChart';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
+import { makeDateFmt, dateSpanDays } from './axisFormat';
 import RiskPremiumChart from './RiskPremiumChart';
 import styles from './MyCharts.module.css';
 
@@ -80,6 +81,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
   );
   const isHidden = (key) => hiddenKeys && hiddenKeys.has(key);
   const yb = useYAxisBounds('Y-axis', flatY(chartData));
+  const dateFmt = makeDateFmt(dateSpanDays(chartData, 'dateStr'));
 
   return (
     <>
@@ -91,10 +93,7 @@ export function ChartInner({ chart, data, period, customFrom, customTo, height, 
           dataKey="dateStr"
           tick={{ fill: '#64748b', fontSize: 9 }}
           interval="preserveStartEnd"
-          tickFormatter={d => {
-            const parts = d.split('/');
-            return parts.length === 3 ? `${parts[0]}/${parts[2].slice(2)}` : d;
-          }}
+          tickFormatter={dateFmt}
         />
         <YAxis
           yAxisId="left"

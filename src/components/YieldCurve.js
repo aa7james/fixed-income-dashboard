@@ -10,6 +10,7 @@ import {
   BarChart, Bar, Cell, ReferenceLine, ReferenceDot, Label,
 } from 'recharts';
 import ResizableChart from './ResizableChart';
+import { fmtTenor, tenorTicks } from './axisFormat';
 import styles from './YieldCurve.module.css';
 
 const CURVE_CATEGORIES = {
@@ -167,10 +168,6 @@ const SpreadTooltip = ({ active, payload }) => {
   );
 };
 
-function formatTenor(x) {
-  if (x < 1) return `${Math.round(x * 12)}m`;
-  return `${x}y`;
-}
 
 export default function YieldCurve({ data, instruments, packItems = [], onTogglePack, isInPack, packMode = false, packConfig = null }) {
   const latest = data.dataRows[data.dataRows.length - 1];
@@ -519,7 +516,8 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                 type="number"
                 name="Tenor"
                 domain={xDomain}
-                tickFormatter={formatTenor}
+                ticks={tenorTicks(xDomain[1])}
+                tickFormatter={fmtTenor}
                 label={{ value: 'Tenor', position: 'insideBottom', offset: -14, fill: '#475569', fontSize: 12 }}
                 tick={{ fill: '#94a3b8', fontSize: 11 }}
               />
