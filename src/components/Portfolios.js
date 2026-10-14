@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart } from 'recharts';
+import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
