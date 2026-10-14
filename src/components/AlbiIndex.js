@@ -67,7 +67,7 @@ const metricCard = (label, value, sub) => (
 export default function AlbiIndex({ data, instruments }) {
   const latest = data?.dataRows?.length ? data.dataRows[data.dataRows.length - 1] : null;
 
-  const { rows, metrics, anyProxy } = useMemo(() => {
+  const { rows, chartRows, metrics, anyProxy } = useMemo(() => {
     const now = new Date();
     const yrs = (d) => (new Date(d) - now) / (1000 * 3600 * 24 * 365);
     const sane = (v) => v != null && Number(v) > 0.2 && Number(v) < 40;
@@ -103,15 +103,17 @@ export default function AlbiIndex({ data, instruments }) {
       coupon: wsum(r => r.c),
       rsaWt: rws.filter(r => r.issuer === 'RSA').reduce((a, r) => a + r.wt, 0),
     };
-    return { rows: rws, metrics, anyProxy: proxy };
+    // Chart shows government bonds only; metrics still cover the whole index.
+    const chartRows = rws.filter(r => r.issuer === 'RSA');
+    return { rows: rws, chartRows, metrics, anyProxy: proxy };
   }, [latest, instruments]);
 
   if (!latest) return null;
   if (!rows.length) return <div style={{ color: '#64748b', fontSize: 13 }}>ALBI: no live yields available yet.</div>;
 
-  const maxN = Math.max(...rows.map(r => r.N));
-  const yld = niceTicks(Math.min(...rows.map(r => r.y)) - 0.3, Math.max(...rows.map(r => r.y)) + 0.3);
-  const wMax = Math.max(...rows.map(r => r.wt));
+  const maxN = Math.max(...chartRows.map(r => r.N));
+  const yld = niceTicks(Math.min(...chartRows.map(r => r.y)) - 0.3, Math.max(...chartRows.map(r => r.y)) + 0.3);
+  const wMax = Math.max(...chartRows.map(r => r.wt));
   const wTicks = niceTicks(0, wMax);
 
   const Tip = ({ active, payload }) => {
@@ -131,7 +133,7 @@ export default function AlbiIndex({ data, instruments }) {
       <div style={{ marginBottom: 12 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>ALBI index — weights on the yield curve</h3>
         <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>
-          FTSE/JSE All Bond Index constituents (as at {AS_AT}): weight by tenor (bars) behind the yield curve (line). Yields live as at {latest.dateStr}.
+          FTSE/JSE All Bond Index government constituents (as at {AS_AT}): weight by tenor (bars) behind the yield curve (line). Yields live as at {latest.dateStr}. Metrics below cover the full index.
         </p>
       </div>
 
@@ -145,7 +147,7 @@ export default function AlbiIndex({ data, instruments }) {
       </div>
 
       <ResizableChart height={360}>
-        <ComposedChart data={rows} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
+        <ComposedChart data={chartRows} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
           <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
           <XAxis type="number" dataKey="N" domain={[0, Math.ceil(maxN)]} ticks={tenorTicks(maxN)} tickFormatter={fmtTenor}
             tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569"
@@ -163,8 +165,8 @@ export default function AlbiIndex({ data, instruments }) {
         </ComposedChart>
       </ResizableChart>
       <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
-        Bars = index weight at each bond's tenor; line = its yield. Metrics are weight‑averaged (semi‑annual, full reprice; modified duration in years, convexity in years²).
-        {anyProxy && ' Non-government constituents (Eskom/Transnet) have no live quote here, so their yield is estimated off the govie curve (ignores credit spread) — a small weight, minor effect on the totals.'}
+        Bars = index weight at each bond's tenor; line = its yield. Chart shows government bonds only (Eskom/Transnet excluded); metrics are weight‑averaged over the full index (semi‑annual, full reprice; modified duration in years, convexity in years²).
+        {anyProxy && ' Non-government constituents (~2% weight) have no live quote, so their yield is estimated off the govie curve for the metrics (ignores credit spread) — minor effect on the totals.'}
       </p>
     </div>
   );
