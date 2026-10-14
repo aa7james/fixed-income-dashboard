@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart } from 'recharts';
+import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
@@ -48,7 +48,7 @@ function computeFund(holdings, maturities, yieldRow, shortRate, asOf, instrument
     }
     if (h.type === 'RSA T-Bill' || h.type === 'NCD') {
       const p = parseDated(h.share); if (!p.mat) return null;
-      const N = Math.max(yrs(p.mat), 0); const y = p.rate != null ? p.rate : shortRate;
+      const N = Math.max(yrs(p.mat), 0); const y = (p.rate != null && p.rate > 0.5) ? p.rate : shortRate;
       return { label: `${h.type === 'NCD' ? 'NCD' : 'TB'} ${p.mat.slice(0, 7)}`, kind: h.type, N, y, dur: N / (1 + (y || 0) / 100), mv };
     }
     if (h.type === 'Money Market') return { label: h.share, kind: 'Money Market', N: 0.03, y: shortRate, dur: 0.08, mv };
@@ -213,10 +213,12 @@ export default function Portfolios({ data, instruments }) {
             <YAxis yAxisId="wt" orientation="right" domain={wTicks?.domain} ticks={wTicks?.ticks} interval={0} tick={{ fill: '#a78bfa', fontSize: 11 }}
               tickFormatter={v => `${v}%`} stroke="#475569" width={46} label={{ value: 'Weight', angle: 90, position: 'insideRight', fill: '#a78bfa', fontSize: 11 }} />
             <Tooltip content={<Tip />} />
-            <Bar yAxisId="wt" dataKey="wt" name="Weight" barSize={16} isAnimationActive={false}>
-              {active.items.map((it, i) => <Cell key={i} fill={TYPE_COLOR[it.kind] || '#64748b'} fillOpacity={0.55} />)}
+            <Bar yAxisId="wt" dataKey="wt" name="Weight" barSize={14} isAnimationActive={false}>
+              {active.items.map((it, i) => <Cell key={i} fill={TYPE_COLOR[it.kind] || '#64748b'} fillOpacity={0.5} />)}
             </Bar>
-            <Line yAxisId="yield" type="monotone" dataKey="y" name="Yield" stroke="#e2e8f0" strokeWidth={1.5} dot={{ r: 2 }} isAnimationActive={false} />
+            <Scatter yAxisId="yield" dataKey="y" name="Yield" isAnimationActive={false}>
+              {active.items.map((it, i) => <Cell key={i} fill={TYPE_COLOR[it.kind] || '#e2e8f0'} />)}
+            </Scatter>
           </ComposedChart>
         </ResizableChart>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, marginTop: 6 }}>
