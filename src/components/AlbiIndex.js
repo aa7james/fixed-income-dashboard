@@ -134,6 +134,10 @@ export default function AlbiIndex({ data, instruments }) {
   };
   const custom = store.asAt !== AS_AT || store.rows !== ALBI;
 
+  const [auctionCodes, setAuctionCodes] = useState(() => { try { return localStorage.getItem('albiAuctionCodes') || ''; } catch { return ''; } });
+  const setAuction = (v) => { setAuctionCodes(v); try { localStorage.setItem('albiAuctionCodes', v); } catch { /* ignore */ } };
+  const auctionSet = useMemo(() => new Set(auctionCodes.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean)), [auctionCodes]);
+
   const { rows, chartRows, metrics, anyProxy } = useMemo(() => {
     const now = new Date();
     const yrs = (d) => (new Date(d) - now) / (1000 * 3600 * 24 * 365);
@@ -226,6 +230,16 @@ export default function AlbiIndex({ data, instruments }) {
         {metricCard('Constituents', metrics.n, `${metrics.rsaWt.toFixed(0)}% RSA`)}
       </div>
 
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>On auction this week (Fri):</span>
+        <input value={auctionCodes} onChange={e => setAuction(e.target.value)}
+          placeholder="e.g. R2035, R2040, R2048"
+          style={{ flex: '1 1 260px', minWidth: 200, fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+        <span style={{ fontSize: 11, color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} /> = on auction
+        </span>
+      </div>
+
       <ResizableChart height={360}>
         <ComposedChart data={chartRows} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
           <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
@@ -241,6 +255,10 @@ export default function AlbiIndex({ data, instruments }) {
           <Tooltip content={<Tip />} />
           <Bar yAxisId="wt" dataKey="wt" name="Weight" fill="#6d28d9" fillOpacity={0.55} barSize={16} isAnimationActive={false}>
             <LabelList dataKey="code" content={BarLabel} />
+            <LabelList dataKey="code" content={(p) => {
+              if (p.x == null || p.width == null || !auctionSet.has(String(p.value).toUpperCase())) return null;
+              return <circle cx={p.x + p.width / 2} cy={p.y + p.height + 7} r={4} fill="#f59e0b" stroke="#0f172a" strokeWidth={1} />;
+            }} />
           </Bar>
           <Line yAxisId="yield" type="monotone" dataKey="y" name="Yield" stroke="#38bdf8" strokeWidth={2}
             dot={{ r: 2.5, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
