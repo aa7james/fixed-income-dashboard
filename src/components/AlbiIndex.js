@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
-import { fmtTenor, tenorTicks } from './axisFormat';
+import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
+import ALBI_HISTORY from '../data/albiHistory.json';
 
 // ALBI constituents (FTSE/JSE All Bond Index), effective 2026-09-04.
 // [code, issuer, coupon %, maturity, raw index weight]. Update monthly from the
@@ -86,6 +87,38 @@ function interp(curve, x) {
   return curve[curve.length - 1].y;
 }
 
+const isoOf = (d) => { const z = d instanceof Date ? d : new Date(d); return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`; };
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthLabel = (iso) => { const [y, m] = iso.split('-'); return `${MON[+m - 1]} ${y}`; };
+
+// Per-bond figures + weighted metrics for a constituent set, priced off `yieldRow`,
+// with tenors measured from `asOfISO`.
+function computeIndex(constituents, yieldRow, asOfISO, instruments) {
+  const now = new Date(asOfISO);
+  const yrs = (d) => (new Date(d) - now) / (1000 * 3600 * 24 * 365);
+  const sane = (v) => v != null && Number(v) > 0.2 && Number(v) < 40;
+  const curve = (instruments || [])
+    .filter(i => i.category === 'Government Bonds' && i.maturity_date && yieldRow && sane(yieldRow[i.name]))
+    .map(i => ({ N: yrs(i.maturity_date), y: Number(yieldRow[i.name]) })).filter(p => p.N > 0).sort((a, b) => a.N - b.N);
+  const yieldByCode = {};
+  (instruments || []).forEach(i => { if (yieldRow && i.display_label && sane(yieldRow[i.name])) yieldByCode[i.display_label] = Number(yieldRow[i.name]); });
+  const total = constituents.reduce((a, r) => a + r[4], 0);
+  let proxy = false;
+  const rws = constituents.map(([code, issuer, c, mat, w]) => {
+    const N = yrs(mat); const wt = (w / total) * 100;
+    let y = yieldByCode[code]; const isProxy = y == null;
+    if (isProxy) { y = interp(curve, N); if (y != null) proxy = true; }
+    const { modDur, convexity } = y != null ? risk(y, N, c) : { modDur: null, convexity: null };
+    return { code, issuer, c, mat, N, wt, y, isProxy, modDur, convexity };
+  }).filter(r => r.N > 0 && r.y != null).sort((a, b) => a.N - b.N);
+  const wsum = (f) => rws.reduce((a, r) => a + (r.wt / 100) * f(r), 0);
+  const metrics = {
+    n: rws.length, ytm: wsum(r => r.y), modDur: wsum(r => r.modDur), convexity: wsum(r => r.convexity),
+    term: wsum(r => r.N), coupon: wsum(r => r.c), rsaWt: rws.filter(r => r.issuer === 'RSA').reduce((a, r) => a + r.wt, 0),
+  };
+  return { rows: rws, chartRows: rws.filter(r => r.issuer === 'RSA'), metrics, anyProxy: proxy };
+}
+
 // Vertical bond-code label drawn upward from the bar's base.
 const BarLabel = ({ x, y, width, height, value }) => {
   if (x == null || width == null) return null;
@@ -138,54 +171,49 @@ export default function AlbiIndex({ data, instruments }) {
   const setAuction = (v) => { setAuctionCodes(v); try { localStorage.setItem('albiAuctionCodes', v); } catch { /* ignore */ } };
   const auctionSet = useMemo(() => new Set(auctionCodes.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean)), [auctionCodes]);
 
+  const dataRows = useMemo(() => data?.dataRows || [], [data]);
+  // All monthly snapshots: bundled history + the uploaded/built-in current one.
+  const snapshots = useMemo(() => {
+    const map = new Map();
+    ALBI_HISTORY.forEach(s => map.set(s.date, s.rows));
+    if (store.rows?.length && store.asAt) map.set(store.asAt, store.rows);
+    return [...map.entries()].map(([date, rows]) => ({ date, rows })).sort((a, b) => (a.date < b.date ? -1 : 1));
+  }, [store]);
+  const [selDate, setSelDate] = useState('');
+  const sel = snapshots.find(s => s.date === selDate) || snapshots[snapshots.length - 1];
+
+  // Nearest data row on or before a given ISO date (for historical yields).
+  const rowByDate = (iso) => {
+    if (!dataRows.length) return null;
+    let best = dataRows[0];
+    for (const r of dataRows) { if (isoOf(r.date) <= iso) best = r; else break; }
+    return best;
+  };
+
   const { rows, chartRows, metrics, anyProxy } = useMemo(() => {
-    const now = new Date();
-    const yrs = (d) => (new Date(d) - now) / (1000 * 3600 * 24 * 365);
-    const sane = (v) => v != null && Number(v) > 0.2 && Number(v) < 40;
-    // Govie curve for yields of constituents we don't have a live quote for.
-    const curve = (instruments || [])
-      .filter(i => i.category === 'Government Bonds' && i.maturity_date && latest && sane(latest[i.name]))
-      .map(i => ({ N: yrs(i.maturity_date), y: Number(latest[i.name]) })).filter(p => p.N > 0).sort((a, b) => a.N - b.N);
-    // code -> live yield (match on display_label)
-    const yieldByCode = {};
-    (instruments || []).forEach(i => {
-      if (latest && i.display_label && sane(latest[i.name])) yieldByCode[i.display_label] = Number(latest[i.name]);
-    });
+    if (!sel) return { rows: [], chartRows: [], metrics: null, anyProxy: false };
+    return computeIndex(sel.rows, rowByDate(sel.date), sel.date, instruments);
+  }, [sel, dataRows, instruments]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const total = store.rows.reduce((a, r) => a + r[4], 0);
-    let proxy = false;
-    const rws = store.rows.map(([code, issuer, c, mat, w]) => {
-      const N = yrs(mat);
-      const wt = (w / total) * 100;
-      let y = yieldByCode[code];
-      const isProxy = y == null;
-      if (isProxy) { y = interp(curve, N); proxy = true; }
-      const { modDur, convexity } = y != null ? risk(y, N, c) : { modDur: null, convexity: null };
-      return { code, issuer, c, mat, N, wt, y, isProxy, modDur, convexity };
-    }).filter(r => r.N > 0 && r.y != null).sort((a, b) => a.N - b.N);
-
-    const wsum = (f) => rws.reduce((a, r) => a + (r.wt / 100) * f(r), 0);
-    const metrics = {
-      n: rws.length,
-      ytm: wsum(r => r.y),
-      modDur: wsum(r => r.modDur),
-      convexity: wsum(r => r.convexity),
-      term: wsum(r => r.N),
-      coupon: wsum(r => r.c),
-      rsaWt: rws.filter(r => r.issuer === 'RSA').reduce((a, r) => a + r.wt, 0),
-    };
-    // Chart shows government bonds only; metrics still cover the whole index.
-    const chartRows = rws.filter(r => r.issuer === 'RSA');
-    return { rows: rws, chartRows, metrics, anyProxy: proxy };
-  }, [latest, instruments, store]);
+  // Metric time-series across every monthly snapshot (priced at each date).
+  const series = useMemo(() => snapshots.map(s => {
+    const m = computeIndex(s.rows, rowByDate(s.date), s.date, instruments).metrics;
+    return { date: s.date, modDur: +m.modDur.toFixed(2), term: +m.term.toFixed(2), ytm: +m.ytm.toFixed(2), convexity: +m.convexity.toFixed(1) };
+  }), [snapshots, dataRows, instruments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!latest) return null;
-  if (!rows.length) return <div style={{ color: '#64748b', fontSize: 13 }}>ALBI: no live yields available yet.</div>;
+  if (!rows.length || !metrics) return <div style={{ color: '#64748b', fontSize: 13 }}>ALBI: no yields available yet.</div>;
 
   const maxN = Math.max(...chartRows.map(r => r.N));
   const yld = niceTicks(Math.min(...chartRows.map(r => r.y)) - 0.3, Math.max(...chartRows.map(r => r.y)) + 0.3);
   const wMax = Math.max(...chartRows.map(r => r.wt));
   const wTicks = niceTicks(0, wMax);
+  const pricedRow = rowByDate(sel.date);
+  const pricedStr = pricedRow ? pricedRow.dateStr : latest.dateStr;
+  // Historical metrics chart scales
+  const durTicks = niceTicks(Math.min(...series.map(s => Math.min(s.modDur, s.term))) - 0.5, Math.max(...series.map(s => Math.max(s.modDur, s.term))) + 0.5);
+  const ytmTicks = niceTicks(Math.min(...series.map(s => s.ytm)) - 0.3, Math.max(...series.map(s => s.ytm)) + 0.3);
+  const histDateFmt = makeDateFmt(dateSpanDays(series, 'date'));
 
   const Tip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
@@ -205,8 +233,16 @@ export default function AlbiIndex({ data, instruments }) {
         <div>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>ALBI index — weights on the yield curve</h3>
           <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>
-            FTSE/JSE All Bond Index government constituents (as at {store.asAt}{custom ? ' · uploaded' : ''}): weight by tenor (bars) behind the yield curve (line). Yields live as at {latest.dateStr}. Metrics below cover the full index.
+            FTSE/JSE All Bond Index government constituents: weight by tenor (bars) behind the yield curve (line). Priced at {pricedStr}. Metrics below cover the full index.
           </p>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>As at:</span>
+            <select value={sel.date} onChange={e => setSelDate(e.target.value)}
+              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }}>
+              {[...snapshots].reverse().map(s => <option key={s.date} value={s.date}>{monthLabel(s.date)}{custom && s.date === store.asAt ? ' (uploaded)' : ''}</option>)}
+            </select>
+            <span style={{ fontSize: 11, color: '#64748b' }}>{snapshots.length} months of history</span>
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -270,6 +306,35 @@ export default function AlbiIndex({ data, instruments }) {
         Bars = index weight at each bond's tenor; line = its yield. Chart shows government bonds only (Eskom/Transnet excluded); metrics are weight‑averaged over the full index (semi‑annual, full reprice; modified duration in years, convexity in years²).
         {anyProxy && ' Non-government constituents (~2% weight) have no live quote, so their yield is estimated off the govie curve for the metrics (ignores credit spread) — minor effect on the totals.'}
       </p>
+
+      {series.length > 2 && (
+        <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid #334155' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', marginBottom: 2 }}>Index metrics over time</div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
+            Each monthly index snapshot ({monthLabel(series[0].date)} → {monthLabel(series[series.length - 1].date)}), priced at that month's yields. Modified duration &amp; term in years (left), YTM % (right).
+          </div>
+          <ResizableChart height={300}>
+            <ComposedChart data={series} margin={{ top: 10, right: 16, bottom: 8, left: 8 }}>
+              <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={histDateFmt} minTickGap={30} stroke="#475569" />
+              <YAxis yAxisId="yr" domain={durTicks?.domain} ticks={durTicks?.ticks} interval={0} tick={{ fill: '#fbbf24', fontSize: 10 }}
+                tickFormatter={v => `${v}y`} stroke="#475569" width={44} />
+              <YAxis yAxisId="ytm" orientation="right" domain={ytmTicks?.domain} ticks={ytmTicks?.ticks} interval={0} tick={{ fill: '#38bdf8', fontSize: 10 }}
+                tickFormatter={v => `${v}%`} stroke="#475569" width={48} />
+              <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                labelFormatter={histDateFmt} formatter={(v, n) => [n === 'YTM' ? `${v}%` : `${v}`, n]} />
+              <Line yAxisId="yr" type="monotone" dataKey="modDur" name="Mod duration" stroke="#fbbf24" strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line yAxisId="yr" type="monotone" dataKey="term" name="Avg term" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
+              <Line yAxisId="ytm" type="monotone" dataKey="ytm" name="YTM" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} />
+            </ComposedChart>
+          </ResizableChart>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+            <span style={{ color: '#fbbf24' }}>— Mod duration</span>
+            <span style={{ color: '#a78bfa' }}>-- Avg term</span>
+            <span style={{ color: '#38bdf8' }}>— YTM (right)</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
