@@ -156,18 +156,29 @@ export default function Portfolios({ data, instruments }) {
   if (!active) return <div style={{ color: '#64748b' }}>No holdings found.</div>;
   const m = active.metrics;
   const hasItems = active.items.length > 0;
-  const yvals = active.items.map(i => i.y);
-  const yld = hasItems ? niceTicks(Math.min(...yvals) - 0.4, Math.max(...yvals) + 0.4) : null;
-  const maxN = Math.max(1, ...active.items.map(i => i.N));
   const wTicks = hasItems ? niceTicks(0, Math.max(...active.items.map(i => i.wt))) : null;
+  // Full government yield curve at the snapshot date, drawn behind the fund's bonds.
+  const prow = rowByDate(curSnap.date);
+  const cNow = new Date(curSnap.date);
+  const cYrs = (d) => (new Date(d) - cNow) / (1000 * 3600 * 24 * 365);
+  const govCurve = (instruments || [])
+    .filter(i => i.category === 'Government Bonds' && i.maturity_date && prow && Number(prow[i.name]) > 0.2 && Number(prow[i.name]) < 40)
+    .map(i => ({ N: cYrs(i.maturity_date), curveY: Number(prow[i.name]) })).filter(p => p.N > 0).sort((a, b) => a.N - b.N);
+  const chartData = [...govCurve, ...active.items].sort((a, b) => a.N - b.N);
+  const maxN = Math.max(1, ...chartData.map(d => d.N));
+  const allY = [...active.items.map(i => i.y), ...govCurve.map(p => p.curveY)];
+  const yld = allY.length ? niceTicks(Math.min(...allY) - 0.3, Math.max(...allY) + 0.3) : null;
   const durTicks = niceTicks(Math.min(0, ...fundSeries.map(s => s.modDur)) , Math.max(...fundSeries.map(s => s.modDur)) + 0.3);
   const histFmt = makeDateFmt(dateSpanDays(fundSeries, 'date'));
   const durColor = m.modDur < ALBI_DUR ? '#fbbf24' : '#4ade80';
 
   const Tip = ({ active: a, payload: p }) => {
-    if (!a || !p?.length) return null; const d = p[0].payload;
+    if (!a || !p?.length) return null;
+    const d = (p.find(x => x.payload?.kind) || p[0]).payload;
+    const box = { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#e2e8f0' };
+    if (!d.kind) return <div style={box}>Govt curve<br />{d.N?.toFixed(1)}y · <strong style={{ color: '#38bdf8' }}>{d.curveY?.toFixed(2)}%</strong></div>;
     return (
-      <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#e2e8f0' }}>
+      <div style={box}>
         <strong>{d.label}</strong> <span style={{ color: TYPE_COLOR[d.kind] }}>{d.kind}</span><br />
         {d.N.toFixed(2)}y · yield <strong>{d.y?.toFixed(2)}%</strong> · dur {d.dur?.toFixed(2)}<br />
         weight <strong>{d.wt.toFixed(1)}%</strong> · MV R{(d.mv / 1e6).toFixed(1)}m
@@ -208,26 +219,28 @@ export default function Portfolios({ data, instruments }) {
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
         {!hasItems && <div style={{ color: '#64748b', fontSize: 13, padding: '12px 2px' }}>{curFund} held no government bonds on {rowByDate(curSnap.date)?.dateStr} (cash instruments hidden).</div>}
         <ResizableChart height={340}>
-          <ComposedChart data={active.items} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
             <XAxis type="number" dataKey="N" domain={[0, Math.ceil(maxN)]} ticks={tenorTicks(maxN)} tickFormatter={fmtTenor}
-              tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569"
+              tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569" allowDuplicatedCategory={false}
               label={{ value: 'Years to maturity', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 12 }} />
             <YAxis yAxisId="yield" domain={yld?.domain} ticks={yld?.ticks} interval={0} tick={{ fill: '#38bdf8', fontSize: 11 }}
               tickFormatter={v => `${v.toFixed(1)}%`} stroke="#475569" width={50} label={{ value: 'Yield', angle: -90, position: 'insideLeft', fill: '#38bdf8', fontSize: 11 }} />
             <YAxis yAxisId="wt" orientation="right" domain={wTicks?.domain} ticks={wTicks?.ticks} interval={0} tick={{ fill: '#a78bfa', fontSize: 11 }}
               tickFormatter={v => `${v}%`} stroke="#475569" width={46} label={{ value: 'Weight', angle: 90, position: 'insideRight', fill: '#a78bfa', fontSize: 11 }} />
             <Tooltip content={<Tip />} />
+            <Line yAxisId="yield" type="monotone" dataKey="curveY" name="Govt curve" stroke="#64748b" strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
             <Bar yAxisId="wt" dataKey="wt" name="Weight" barSize={14} isAnimationActive={false}>
-              {active.items.map((it, i) => <Cell key={i} fill={TYPE_COLOR[it.kind] || '#64748b'} fillOpacity={0.5} />)}
+              {chartData.map((d, i) => <Cell key={i} fill={d.kind ? (TYPE_COLOR[d.kind] || '#64748b') : 'transparent'} fillOpacity={0.5} />)}
             </Bar>
-            <Scatter yAxisId="yield" dataKey="y" name="Yield" isAnimationActive={false}>
-              {active.items.map((it, i) => <Cell key={i} fill={TYPE_COLOR[it.kind] || '#e2e8f0'} />)}
+            <Scatter yAxisId="yield" dataKey="y" name="Holding" isAnimationActive={false}>
+              {chartData.map((d, i) => <Cell key={i} fill={d.kind ? (TYPE_COLOR[d.kind] || '#e2e8f0') : 'transparent'} />)}
             </Scatter>
           </ComposedChart>
         </ResizableChart>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, marginTop: 6 }}>
-          {[...new Set(active.items.map(i => i.kind))].map(k => <span key={k} style={{ color: TYPE_COLOR[k] || '#94a3b8' }}>■ {k}</span>)}
+          <span style={{ color: '#64748b' }}>— Govt curve</span>
+          {[...new Set(active.items.map(i => i.kind))].map(k => <span key={k} style={{ color: TYPE_COLOR[k] || '#94a3b8' }}>● {k}</span>)}
         </div>
 
         {fundSeries.length > 1 && (
