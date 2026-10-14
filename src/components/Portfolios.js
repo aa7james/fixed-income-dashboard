@@ -10,6 +10,18 @@ const ALBI_DUR = 6.33; // benchmark reference (ALBI modified duration)
 let SESSION = null;
 const TYPE_COLOR = { Bond: '#38bdf8', 'RSA T-Bill': '#4ade80', NCD: '#fbbf24', 'Money Market': '#a78bfa' };
 
+// Vertical bond-code label drawn up from the bar's base (skips the curve rows).
+const BarLabel = ({ x, y, width, height, value }) => {
+  if (x == null || width == null || height == null || !value) return null;
+  const cx = x + width / 2, cy = y + height - 4;
+  return <text x={cx} y={cy} transform={`rotate(-90, ${cx}, ${cy})`} textAnchor="start" fill="#bae6fd" fontSize={9} fontWeight={600}>{value}</text>;
+};
+// Bond-code label above each holding dot.
+const DotLabel = ({ x, y, value }) => {
+  if (x == null || y == null || !value) return null;
+  return <text x={x} y={y - 9} textAnchor="middle" fill="#7dd3fc" fontSize={9} fontWeight={600}>{value}</text>;
+};
+
 function bondPV(y, n, c) {
   if (n <= 0) return 100;
   const i = y / 200, tp = n * 2, cnt = Math.ceil(tp - 1e-9);
@@ -232,9 +244,11 @@ export default function Portfolios({ data, instruments }) {
             <Line yAxisId="yield" type="monotone" dataKey="curveY" name="Govt curve" stroke="#64748b" strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
             <Bar yAxisId="wt" dataKey="wt" name="Weight" barSize={14} isAnimationActive={false}>
               {chartData.map((d, i) => <Cell key={i} fill={d.kind ? (TYPE_COLOR[d.kind] || '#64748b') : 'transparent'} fillOpacity={0.5} />)}
+              <LabelList dataKey="label" content={BarLabel} />
             </Bar>
             <Scatter yAxisId="yield" dataKey="y" name="Holding" isAnimationActive={false}>
               {chartData.map((d, i) => <Cell key={i} fill={d.kind ? (TYPE_COLOR[d.kind] || '#e2e8f0') : 'transparent'} />)}
+              <LabelList dataKey="label" content={DotLabel} />
             </Scatter>
           </ComposedChart>
         </ResizableChart>
