@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 
 const cell = (x = {}) => ({ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...x });
@@ -178,6 +178,20 @@ export default function SAGovBonds({ data, instruments }) {
       .sort((a, b) => a.mat - b.mat);
   }, [latest, instruments]);
 
+  // Clean y-axis: domain rounded out to 0.25% with evenly-spaced ticks (0.10% when narrow).
+  const curveY = useMemo(() => {
+    if (!curvePoints.length) return { domain: ['auto', 'auto'], ticks: undefined };
+    const ys = curvePoints.map(p => p.ytm).concat(cashRate != null && cashRate > 0 ? [cashRate] : []);
+    const lo = Math.floor((Math.min(...ys) - 0.1) * 4) / 4;
+    const hi = Math.ceil((Math.max(...ys) + 0.1) * 4) / 4;
+    const range = hi - lo;
+    let step = range <= 1.2 ? 0.10 : 0.25;
+    if (range / step > 30) step = 0.5;
+    const ticks = [];
+    for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(2));
+    return { domain: [lo, hi], ticks };
+  }, [curvePoints, cashRate]);
+
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
   return (
@@ -308,15 +322,17 @@ export default function SAGovBonds({ data, instruments }) {
                 <XAxis type="number" dataKey="mat" domain={[0, 'dataMax']} tick={{ fill: '#94a3b8', fontSize: 11 }}
                   tickFormatter={v => `${v.toFixed(0)}y`} stroke="#475569"
                   label={{ value: 'Years to maturity', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 12 }} />
-                <YAxis domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickFormatter={v => `${v.toFixed(1)}%`} stroke="#475569" width={48} />
+                <YAxis domain={curveY.domain} ticks={curveY.ticks} interval={0} allowDecimals tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tickFormatter={v => `${v.toFixed(2)}%`} stroke="#475569" width={52} />
                 <Tooltip content={<CurveTooltip />} />
                 {cashRate != null && cashRate > 0 && (
                   <ReferenceLine y={cashRate} stroke="#f59e0b" strokeDasharray="5 4"
                     label={{ value: `${benchLabel} ${cashRate.toFixed(2)}%`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }} />
                 )}
                 <Line type="monotone" dataKey="ytm" stroke="#38bdf8" strokeWidth={2}
-                  dot={{ r: 3, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                  dot={{ r: 3, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                  <LabelList dataKey="label" position="top" offset={8} style={{ fill: '#7dd3fc', fontSize: 10, fontWeight: 600 }} />
+                </Line>
               </LineChart>
             </ResizableChart>
             <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0' }}>
