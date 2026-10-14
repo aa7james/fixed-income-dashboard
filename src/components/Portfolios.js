@@ -116,16 +116,19 @@ export default function Portfolios({ data, instruments }) {
   const curFund = fund || funds[0];
   const curSnap = snaps.find(s => s.id === snapId) || snaps[snaps.length - 1];
 
+  // Cash instruments (T-Bills, NCDs, money market) hidden for now — bonds only.
+  const BONDS_ONLY = (h) => h.type === 'Bond';
+
   const active = useMemo(() => {
     if (!payload || !curFund || !curSnap) return null;
-    const hs = payload.holdings.filter(h => h.fund === curFund && h.snapshot_id === curSnap.id);
+    const hs = payload.holdings.filter(h => h.fund === curFund && h.snapshot_id === curSnap.id && BONDS_ONLY(h));
     return computeFund(hs, payload.maturities, rowByDate(curSnap.date), shortRate, curSnap.date, instruments);
   }, [payload, curFund, curSnap, rowByDate, shortRate, instruments]);
 
   const fundSeries = useMemo(() => {
     if (!payload || !curFund) return [];
     return snaps.map(s => {
-      const hs = payload.holdings.filter(h => h.fund === curFund && h.snapshot_id === s.id);
+      const hs = payload.holdings.filter(h => h.fund === curFund && h.snapshot_id === s.id && BONDS_ONLY(h));
       const m = computeFund(hs, payload.maturities, rowByDate(s.date), shortRate, s.date, instruments).metrics;
       return { date: s.date, modDur: +m.modDur.toFixed(2), ytm: +m.ytm.toFixed(2), cashPct: +m.cashPct.toFixed(1) };
     });
@@ -150,12 +153,13 @@ export default function Portfolios({ data, instruments }) {
     );
   }
 
-  if (!active) return <div style={{ color: '#64748b' }}>No fixed-income holdings found.</div>;
+  if (!active) return <div style={{ color: '#64748b' }}>No holdings found.</div>;
   const m = active.metrics;
+  const hasItems = active.items.length > 0;
   const yvals = active.items.map(i => i.y);
-  const yld = niceTicks(Math.min(...yvals) - 0.4, Math.max(...yvals) + 0.4);
+  const yld = hasItems ? niceTicks(Math.min(...yvals) - 0.4, Math.max(...yvals) + 0.4) : null;
   const maxN = Math.max(1, ...active.items.map(i => i.N));
-  const wTicks = niceTicks(0, Math.max(...active.items.map(i => i.wt)));
+  const wTicks = hasItems ? niceTicks(0, Math.max(...active.items.map(i => i.wt))) : null;
   const durTicks = niceTicks(Math.min(0, ...fundSeries.map(s => s.modDur)) , Math.max(...fundSeries.map(s => s.modDur)) + 0.3);
   const histFmt = makeDateFmt(dateSpanDays(fundSeries, 'date'));
   const durColor = m.modDur < ALBI_DUR ? '#fbbf24' : '#4ade80';
@@ -177,7 +181,7 @@ export default function Portfolios({ data, instruments }) {
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Portfolios — fixed income on the curve</h2>
           <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
-            Each fund's fixed‑income sleeve (bonds, T‑Bills, NCDs, money market) by tenor, priced at {rowByDate(curSnap.date)?.dateStr}. Benchmark: ALBI modified duration ≈ {ALBI_DUR}.
+            Each fund's government bonds by tenor, priced at {rowByDate(curSnap.date)?.dateStr}. Cash instruments (T‑Bills, NCDs, MM) hidden. Benchmark: ALBI modified duration ≈ {ALBI_DUR}.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -193,15 +197,16 @@ export default function Portfolios({ data, instruments }) {
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        {card('FI market value', `R${(m.mv / 1e6).toFixed(0)}m`)}
+        {card('Bond MV', `R${(m.mv / 1e6).toFixed(0)}m`)}
         {card('Modified duration', m.modDur.toFixed(2), `vs ALBI ${ALBI_DUR}`, durColor)}
         {card('vs ALBI', `${(m.modDur - ALBI_DUR >= 0 ? '+' : '')}${(m.modDur - ALBI_DUR).toFixed(2)}`, 'years of duration', durColor)}
         {card('Weighted yield', `${m.ytm.toFixed(2)}%`)}
         {card('Avg term', `${m.term.toFixed(2)}y`)}
-        {card('Cash / MM', `${m.cashPct.toFixed(0)}%`, `${m.n} lines`)}
+        {card('Bonds held', m.n, 'government bonds')}
       </div>
 
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
+        {!hasItems && <div style={{ color: '#64748b', fontSize: 13, padding: '12px 2px' }}>{curFund} held no government bonds on {rowByDate(curSnap.date)?.dateStr} (cash instruments hidden).</div>}
         <ResizableChart height={340}>
           <ComposedChart data={active.items} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
@@ -222,7 +227,7 @@ export default function Portfolios({ data, instruments }) {
           </ComposedChart>
         </ResizableChart>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, marginTop: 6 }}>
-          {Object.entries(TYPE_COLOR).map(([k, c]) => <span key={k} style={{ color: c }}>■ {k}</span>)}
+          {[...new Set(active.items.map(i => i.kind))].map(k => <span key={k} style={{ color: TYPE_COLOR[k] || '#94a3b8' }}>■ {k}</span>)}
         </div>
 
         {fundSeries.length > 1 && (
