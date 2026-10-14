@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabase';
 import ResizableChart from './ResizableChart';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
 import { makeDateFmt, dateSpanDays } from './axisFormat';
+import AlbiIndex from './AlbiIndex';
 
 const BENCHMARK = 'ALBI';
 const inp = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', padding: '6px 8px', fontSize: 13 };
@@ -236,6 +237,8 @@ export default function ModelPortfolio({ data, instruments }) {
       ) : (
         <div style={{ color: '#64748b', fontSize: 13 }}>Add holdings and pick a start date to see performance.</div>
       )}
+
+      <AlbiIndex data={data} instruments={instruments} />
     </div>
   );
 }
