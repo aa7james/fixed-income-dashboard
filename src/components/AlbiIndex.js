@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks } from './axisFormat';
@@ -85,6 +85,16 @@ function interp(curve, x) {
   }
   return curve[curve.length - 1].y;
 }
+
+// Vertical bond-code label drawn upward from the bar's base.
+const BarLabel = ({ x, y, width, height, value }) => {
+  if (x == null || width == null) return null;
+  const cx = x + width / 2, cy = y + height - 4;
+  return (
+    <text x={cx} y={cy} transform={`rotate(-90, ${cx}, ${cy})`} textAnchor="start"
+      fill="#e9d5ff" fontSize={9} fontWeight={600}>{value}</text>
+  );
+};
 
 const metricCard = (label, value, sub) => (
   <div key={label} style={{ flex: '1 1 130px', minWidth: 120, background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: '10px 12px' }}>
@@ -229,9 +239,13 @@ export default function AlbiIndex({ data, instruments }) {
             tickFormatter={v => `${v}%`} stroke="#475569" width={46}
             label={{ value: 'Weight', angle: 90, position: 'insideRight', fill: '#a78bfa', fontSize: 11 }} />
           <Tooltip content={<Tip />} />
-          <Bar yAxisId="wt" dataKey="wt" name="Weight" fill="#6d28d9" fillOpacity={0.55} barSize={14} isAnimationActive={false} />
+          <Bar yAxisId="wt" dataKey="wt" name="Weight" fill="#6d28d9" fillOpacity={0.55} barSize={16} isAnimationActive={false}>
+            <LabelList dataKey="code" content={BarLabel} />
+          </Bar>
           <Line yAxisId="yield" type="monotone" dataKey="y" name="Yield" stroke="#38bdf8" strokeWidth={2}
-            dot={{ r: 2.5, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false} />
+            dot={{ r: 2.5, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
+            <LabelList dataKey="code" position="top" offset={8} style={{ fill: '#7dd3fc', fontSize: 9, fontWeight: 600 }} />
+          </Line>
         </ComposedChart>
       </ResizableChart>
       <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
