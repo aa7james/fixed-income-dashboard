@@ -14,9 +14,10 @@ import CashTab from './components/CashTab';
 import ModelPortfolio from './components/ModelPortfolio';
 import SAGovBonds from './components/SAGovBonds';
 import ILBonds from './components/ILBonds';
+import Portfolios from './components/Portfolios';
 import styles from './App.module.css';
 
-const TABS = ['Yield Curve', 'Cash', 'SA Govt Bonds', 'SA Linkers', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Investment Pack', 'Instruments', 'Latest Rates'];
+const TABS = ['Yield Curve', 'Cash', 'SA Govt Bonds', 'SA Linkers', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Portfolios', 'Investment Pack', 'Instruments', 'Latest Rates'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -186,6 +187,7 @@ export default function App() {
             {activeTab === 'Chart Builder'   && <ChartBuilder   data={data} instruments={instruments} onSaved={() => setChartRefresh(n => n + 1)} />}
             {activeTab === 'My Charts'       && <MyCharts       data={data} refreshTrigger={chartRefresh} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Model Portfolio' && <ModelPortfolio data={data} instruments={instruments} />}
+            {activeTab === 'Portfolios'      && <Portfolios     data={data} instruments={instruments} />}
             {activeTab === 'SA Govt Bonds'   && <SAGovBonds     data={data} instruments={instruments} />}
             {activeTab === 'SA Linkers'      && <ILBonds        data={data} instruments={instruments} />}
             {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} onReorder={reorderPack} onUpdateNote={updatePackNote} data={data} instruments={instruments} />}
