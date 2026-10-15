@@ -34,6 +34,7 @@ export function flatY(data, exclude = DEFAULT_X_KEYS, keep = null) {
     if (row && typeof row === 'object') {
       for (const k in row) {
         if (keepSet ? !keepSet.has(k) : ex.has(k)) continue;
+        if (row[k] == null || row[k] === '') continue; // skip gaps — Number(null)===0 would be a phantom 0
         const v = Number(row[k]);
         if (isFinite(v)) out.push(v);
       }
