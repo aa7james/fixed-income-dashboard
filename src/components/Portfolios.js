@@ -45,22 +45,26 @@ function computeFund(holdings, maturities, yieldRow, shortRate, asOf, instrument
   const ybCode = {};
   (instruments || []).forEach(i => { if (yieldRow && i.display_label) { const v = Number(yieldRow[i.name]); if (v > 0.2 && v < 40) ybCode[i.display_label] = v; } });
 
+  const bookOf = h => { const b = Number(h.book_price); return (b > 0.2 && b < 40) ? b : null; };
   const items = (holdings || []).map(h => {
     const mv = Number(h.mv) || 0; if (mv <= 0) return null;
+    const yBookRaw = bookOf(h);
     if (h.type === 'Bond') {
       const m = matByCode[h.share]; if (!m) return null;
       const N = yrs(m.maturity_date); if (N <= 0) return null;
       let y = ybCode[h.share];
-      if (y == null && Number(h.book_price) > 0.2 && Number(h.book_price) < 40) y = Number(h.book_price);
+      if (y == null && yBookRaw != null) y = yBookRaw;   // no live mark → fall back to book
       if (y == null) return null;
-      return { label: h.share, kind: 'Bond', N, y, dur: modDur(y, N, Number(m.coupon)), cvx: convexity(y, N, Number(m.coupon)), mv };
+      const yBook = yBookRaw != null ? yBookRaw : y;     // book yield (yield at cost)
+      return { label: h.share, kind: 'Bond', N, y, yBook, dur: modDur(y, N, Number(m.coupon)), cvx: convexity(y, N, Number(m.coupon)), mv };
     }
     if (h.type === 'RSA T-Bill' || h.type === 'NCD') {
       const p = parseDated(h.share); if (!p.mat) return null;
       const N = Math.max(yrs(p.mat), 0); const y = (p.rate != null && p.rate > 0.5) ? p.rate : shortRate;
-      return { label: `${h.type === 'NCD' ? 'NCD' : 'TB'} ${p.mat.slice(0, 7)}`, kind: h.type, N, y, dur: N / (1 + (y || 0) / 100), mv };
+      const yBook = yBookRaw != null ? yBookRaw : y;     // fixed to maturity → book = purchase rate
+      return { label: `${h.type === 'NCD' ? 'NCD' : 'TB'} ${p.mat.slice(0, 7)}`, kind: h.type, N, y, yBook, dur: N / (1 + (y || 0) / 100), mv };
     }
-    if (h.type === 'Money Market') return { label: h.share, kind: 'Money Market', N: 0.03, y: shortRate, dur: 0.08, mv };
+    if (h.type === 'Money Market') return { label: h.share, kind: 'Money Market', N: 0.03, y: shortRate, yBook: yBookRaw != null ? yBookRaw : shortRate, dur: 0.08, mv };
     return null;
   }).filter(Boolean).sort((a, b) => a.N - b.N);
 
@@ -70,7 +74,7 @@ function computeFund(holdings, maturities, yieldRow, shortRate, asOf, instrument
   return {
     items,
     metrics: {
-      mv: tot, modDur: wsum(x => x.dur || 0), ytm: wsum(x => x.y || 0), term: wsum(x => x.N),
+      mv: tot, modDur: wsum(x => x.dur || 0), ytm: wsum(x => x.y || 0), ytmBook: wsum(x => x.yBook || 0), term: wsum(x => x.N),
       convexity: wsum(x => x.cvx || 0),
       cashPct: items.filter(x => x.kind === 'Money Market').reduce((a, x) => a + x.wt, 0), n: items.length,
     },
@@ -241,7 +245,11 @@ export default function Portfolios({ data, instruments }) {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         {card('Bond MV', `R${(m.mv / 1e6).toFixed(0)}m`, `${m.n} government bonds`)}
         {card('Modified duration', m.modDur.toFixed(2), cmpSub(m.modDur, albi?.modDur), durColor)}
-        {card('Weighted yield', `${m.ytm.toFixed(2)}%`, cmpSub(m.ytm, albi?.ytm, '%'))}
+        {card('Market yield', `${m.ytm.toFixed(2)}%`, cmpSub(m.ytm, albi?.ytm, '%'))}
+        {card('Book yield', `${m.ytmBook.toFixed(2)}%`, (() => {
+          const d = m.ytm - m.ytmBook;
+          return <>at cost <span style={{ color: d >= 0 ? '#4ade80' : '#f87171' }}>({d >= 0 ? '+' : ''}{d.toFixed(2)} vs mkt)</span></>;
+        })())}
         {card('Convexity', m.convexity.toFixed(0), cmpSub(m.convexity, albi?.convexity))}
         {card('Avg term', `${m.term.toFixed(2)}y`, cmpSub(m.term, albi?.term, 'y'))}
         {card('Bonds held', m.n, albi ? `ALBI holds ${albi.n}` : 'government bonds')}
