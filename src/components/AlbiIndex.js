@@ -93,7 +93,7 @@ const monthLabel = (iso) => { const [y, m] = iso.split('-'); return `${MON[+m - 
 
 // Per-bond figures + weighted metrics for a constituent set, priced off `yieldRow`,
 // with tenors measured from `asOfISO`.
-function computeIndex(constituents, yieldRow, asOfISO, instruments) {
+export function computeIndex(constituents, yieldRow, asOfISO, instruments) {
   const now = new Date(asOfISO);
   const yrs = (d) => (new Date(d) - now) / (1000 * 3600 * 24 * 365);
   const sane = (v) => v != null && Number(v) > 0.2 && Number(v) < 40;

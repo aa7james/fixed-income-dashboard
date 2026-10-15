@@ -3,6 +3,8 @@ import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
+import { computeIndex } from './AlbiIndex';
+import ALBI_HISTORY from '../data/albiHistory.json';
 
 const ALBI_DUR = 6.33; // benchmark reference (ALBI modified duration)
 // In-memory only: survives tab switches within the app, but is wiped on a page
@@ -24,6 +26,7 @@ function bondPV(y, n, c) {
   return pv + 100 / Math.pow(1 + i, tp);
 }
 function modDur(y, n, c) { const h = 0.01; return (-((bondPV(y + h, n, c) - bondPV(y - h, n, c)) / (2 * h)) / bondPV(y, n, c)) * 100; }
+function convexity(y, n, c) { const h = 0.01; const p = bondPV(y, n, c); return ((bondPV(y + h, n, c) + bondPV(y - h, n, c) - 2 * p) / (p * h * h)) * 10000; }
 const isoOf = (d) => { const z = d instanceof Date ? d : new Date(d); return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`; };
 // Parse a T-Bill / NCD description e.g. "RSA TB 7.45% 21102026" -> {rate, mat}
 function parseDated(name) {
@@ -50,7 +53,7 @@ function computeFund(holdings, maturities, yieldRow, shortRate, asOf, instrument
       let y = ybCode[h.share];
       if (y == null && Number(h.book_price) > 0.2 && Number(h.book_price) < 40) y = Number(h.book_price);
       if (y == null) return null;
-      return { label: h.share, kind: 'Bond', N, y, dur: modDur(y, N, Number(m.coupon)), mv };
+      return { label: h.share, kind: 'Bond', N, y, dur: modDur(y, N, Number(m.coupon)), cvx: convexity(y, N, Number(m.coupon)), mv };
     }
     if (h.type === 'RSA T-Bill' || h.type === 'NCD') {
       const p = parseDated(h.share); if (!p.mat) return null;
@@ -68,6 +71,7 @@ function computeFund(holdings, maturities, yieldRow, shortRate, asOf, instrument
     items,
     metrics: {
       mv: tot, modDur: wsum(x => x.dur || 0), ytm: wsum(x => x.y || 0), term: wsum(x => x.N),
+      convexity: wsum(x => x.cvx || 0),
       cashPct: items.filter(x => x.kind === 'Money Market').reduce((a, x) => a + x.wt, 0), n: items.length,
     },
   };
@@ -117,7 +121,8 @@ export default function Portfolios({ data, instruments }) {
     return best;
   }, [dataRows]);
 
-  const funds = useMemo(() => payload ? [...new Set(payload.holdings.map(h => h.fund))].sort() : [], [payload]);
+  // Only funds that actually hold bonds or NCDs (drop money-market-only funds).
+  const funds = useMemo(() => payload ? [...new Set(payload.holdings.filter(h => h.type === 'Bond' || h.type === 'NCD').map(h => h.fund))].sort() : [], [payload]);
   const snaps = useMemo(() => payload ? payload.snapshots : [], [payload]);
   const curFund = fund || funds[0];
   const curSnap = snaps.find(s => s.id === snapId) || snaps[snaps.length - 1];
@@ -139,6 +144,14 @@ export default function Portfolios({ data, instruments }) {
       return { date: s.date, modDur: +m.modDur.toFixed(2), ytm: +m.ytm.toFixed(2), cashPct: +m.cashPct.toFixed(1) };
     });
   }, [payload, curFund, snaps, rowByDate, shortRate, instruments]);
+
+  // ALBI benchmark metrics at the same snapshot date (nearest monthly ALBI file).
+  const albi = useMemo(() => {
+    if (!curSnap || !payload) return null;
+    const t = new Date(curSnap.date);
+    const snap = ALBI_HISTORY.reduce((a, s) => Math.abs(new Date(s.date) - t) < Math.abs(new Date(a.date) - t) ? s : a);
+    return computeIndex(snap.rows, rowByDate(curSnap.date), curSnap.date, instruments).metrics;
+  }, [curSnap, payload, rowByDate, instruments]);
 
   // ---- password gate ----
   if (!authed) {
@@ -182,7 +195,13 @@ export default function Portfolios({ data, instruments }) {
   const wTicks = heldWts.length ? niceTicks(0, Math.max(...heldWts)) : null;
   const durTicks = niceTicks(Math.min(0, ...fundSeries.map(s => s.modDur)) , Math.max(...fundSeries.map(s => s.modDur)) + 0.3);
   const histFmt = makeDateFmt(dateSpanDays(fundSeries, 'date'));
-  const durColor = m.modDur < ALBI_DUR ? '#fbbf24' : '#4ade80';
+  const durColor = albi && m.modDur < albi.modDur ? '#fbbf24' : '#f1f5f9';
+  // "ALBI X (±diff)" sub-line for a metric card.
+  const cmpSub = (f, a, unit = '') => {
+    if (a == null) return null;
+    const d = f - a;
+    return <>ALBI {a.toFixed(2)}{unit} <span style={{ color: d >= 0 ? '#4ade80' : '#f87171' }}>({d >= 0 ? '+' : ''}{d.toFixed(2)})</span></>;
+  };
 
   const Tip = ({ active: a, payload: p }) => {
     if (!a || !p?.length) return null;
@@ -204,7 +223,7 @@ export default function Portfolios({ data, instruments }) {
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Portfolios — fixed income on the curve</h2>
           <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
-            Each fund's government bonds by tenor, priced at {rowByDate(curSnap.date)?.dateStr}. Cash instruments (T‑Bills, NCDs, MM) hidden. Benchmark: ALBI modified duration ≈ {ALBI_DUR}.
+            Each fund's government bonds by tenor, priced at {rowByDate(curSnap.date)?.dateStr}. Cash instruments (T‑Bills, NCDs, MM) hidden. Benchmark: ALBI at this date (mod dur {albi ? albi.modDur.toFixed(2) : ALBI_DUR}, YTM {albi ? albi.ytm.toFixed(2) + '%' : '—'}).
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -220,12 +239,12 @@ export default function Portfolios({ data, instruments }) {
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        {card('Bond MV', `R${(m.mv / 1e6).toFixed(0)}m`)}
-        {card('Modified duration', m.modDur.toFixed(2), `vs ALBI ${ALBI_DUR}`, durColor)}
-        {card('vs ALBI', `${(m.modDur - ALBI_DUR >= 0 ? '+' : '')}${(m.modDur - ALBI_DUR).toFixed(2)}`, 'years of duration', durColor)}
-        {card('Weighted yield', `${m.ytm.toFixed(2)}%`)}
-        {card('Avg term', `${m.term.toFixed(2)}y`)}
-        {card('Bonds held', m.n, 'government bonds')}
+        {card('Bond MV', `R${(m.mv / 1e6).toFixed(0)}m`, `${m.n} government bonds`)}
+        {card('Modified duration', m.modDur.toFixed(2), cmpSub(m.modDur, albi?.modDur), durColor)}
+        {card('Weighted yield', `${m.ytm.toFixed(2)}%`, cmpSub(m.ytm, albi?.ytm, '%'))}
+        {card('Convexity', m.convexity.toFixed(0), cmpSub(m.convexity, albi?.convexity))}
+        {card('Avg term', `${m.term.toFixed(2)}y`, cmpSub(m.term, albi?.term, 'y'))}
+        {card('Bonds held', m.n, albi ? `ALBI holds ${albi.n}` : 'government bonds')}
       </div>
 
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
