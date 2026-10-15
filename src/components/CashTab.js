@@ -223,7 +223,7 @@ export default function CashTab({ data, instruments }) {
 
   const fmt = (v) => v == null ? '—' : v.toFixed(2);
   const fmtPickup = (v) => v == null || callRate == null ? '' : `${v - callRate >= 0 ? '+' : ''}${((v - callRate) * 100).toFixed(0)}`;
-  const yb = useYAxisBounds('Y-axis', flatY(fraPath, ['label']));
+  const yb = useYAxisBounds('Y-axis', flatY(fraPath, undefined, ['rate']));
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
