@@ -154,3 +154,23 @@
   font-weight: 700;
   color: #38bdf8;
 }
+
+/* "Why are yields here?" drivers panel.
+   Narrow screens: full-width block at the top of the tab (no clipping).
+   Wide screens (enough left gutter): pinned into the left margin. */
+.driversGutter {
+  margin-bottom: 16px;
+}
+
+@media (min-width: 1880px) {
+  .driversGutter {
+    position: fixed;
+    top: 132px;
+    left: 16px;
+    width: 300px;
+    max-height: calc(100vh - 152px);
+    overflow-y: auto;
+    z-index: 5;
+    margin-bottom: 0;
+  }
+}

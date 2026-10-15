@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import InflationLinkedBonds from './InflationLinkedBonds';
+import YieldDrivers from './YieldDrivers';
 import USYieldCurve from './USYieldCurve';
 import USInflationLinked from './USInflationLinked';
 import AddToPackButton from './AddToPackButton';
@@ -352,6 +353,11 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
   return (
     <div>
+      {!packMode && (
+        <div className={styles.driversGutter}>
+          <YieldDrivers />
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h2 className={styles.heading}>SA Fixed Income Yield Curve</h2>
