@@ -246,10 +246,7 @@ export default function Portfolios({ data, instruments }) {
         {card('Bond MV', `R${(m.mv / 1e6).toFixed(0)}m`, `${m.n} government bonds`)}
         {card('Modified duration', m.modDur.toFixed(2), cmpSub(m.modDur, albi?.modDur), durColor)}
         {card('Market yield', `${m.ytm.toFixed(2)}%`, cmpSub(m.ytm, albi?.ytm, '%'))}
-        {card('Book yield', `${m.ytmBook.toFixed(2)}%`, (() => {
-          const d = m.ytm - m.ytmBook;
-          return <>at cost <span style={{ color: d >= 0 ? '#4ade80' : '#f87171' }}>({d >= 0 ? '+' : ''}{d.toFixed(2)} vs mkt)</span></>;
-        })())}
+        {card('Book yield', `${m.ytmBook.toFixed(2)}%`, cmpSub(m.ytmBook, albi?.ytm, '%'))}
         {card('Convexity', m.convexity.toFixed(0), cmpSub(m.convexity, albi?.convexity))}
         {card('Avg term', `${m.term.toFixed(2)}y`, cmpSub(m.term, albi?.term, 'y'))}
         {card('Bonds held', m.n, albi ? `ALBI holds ${albi.n}` : 'government bonds')}
