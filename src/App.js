@@ -13,11 +13,12 @@ import InstrumentsAdmin from './components/InstrumentsAdmin';
 import CashTab from './components/CashTab';
 import ModelPortfolio from './components/ModelPortfolio';
 import SAGovBonds from './components/SAGovBonds';
+import USGovBonds from './components/USGovBonds';
 import ILBonds from './components/ILBonds';
 import Portfolios from './components/Portfolios';
 import styles from './App.module.css';
 
-const TABS = ['Yield Curve', 'Cash', 'SA Govt Bonds', 'SA Linkers', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Portfolios', 'Investment Pack', 'Instruments', 'Latest Rates'];
+const TABS = ['Yield Curve', 'Cash', 'SA Govt Bonds', 'SA Linkers', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Portfolios', 'Investment Pack', 'Instruments', 'Latest Rates', 'US Govt Bonds'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -181,6 +182,7 @@ export default function App() {
         <>
           <main className={styles.main}>
             {activeTab === 'Latest Rates'    && <LatestRates    data={data} groups={groups} />}
+            {activeTab === 'US Govt Bonds'   && <USGovBonds     data={data} />}
             {activeTab === 'Cash'            && <CashTab        data={data} instruments={instruments} />}
             {activeTab === 'Market Pricing'  && <MarketPricing  data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
             {activeTab === 'Yield Curve'     && <YieldCurve     data={data} instruments={instruments} packItems={packItems} onTogglePack={togglePack} isInPack={isInPack} />}
