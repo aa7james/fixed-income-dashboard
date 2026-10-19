@@ -9,7 +9,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 export async function loadMMYields() {
   const { data, error } = await supabase
     .from('mm_yields')
-    .select('manco, fund_class, monthly_nominal, rate_date, rank, updated_at')
+    .select('manco, fund_class, monthly_nominal, eff_7day, rate_date, rank, updated_at')
     .order('rank', { ascending: true });
   if (error) throw new Error(error.message);
   return data || [];

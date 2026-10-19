@@ -444,6 +444,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
                     <tr style={{ color: '#94a3b8' }}>
                       <th style={{ padding: '5px 8px', textAlign: 'left' }}>Manco</th>
                       <th style={{ padding: '5px 8px', textAlign: 'left' }}>Fund / Class</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'right' }}>7‑day eff. (NACA)</th>
                       <th style={{ padding: '5px 8px', textAlign: 'right' }}>Monthly nominal</th>
                       <th style={{ padding: '5px 8px', textAlign: 'right' }}>Rate date</th>
                     </tr>
@@ -453,6 +454,9 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
                       <tr key={f.fund_class} style={{ borderTop: '1px solid #1e293b' }}>
                         <td style={{ padding: '5px 8px', textAlign: 'left', color: '#94a3b8' }}>{f.manco}</td>
                         <td style={{ padding: '5px 8px', textAlign: 'left', color: i === 0 ? '#4ade80' : '#e2e8f0', fontWeight: i === 0 ? 700 : 400 }}>{f.fund_class}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#e2e8f0' }}>
+                          {f.eff_7day != null ? `${Number(f.eff_7day).toFixed(2)}%` : '—'}
+                        </td>
                         <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: '#c4b5fd' }}>
                           {f.monthly_nominal != null ? `${Number(f.monthly_nominal).toFixed(2)}%` : '—'}
                         </td>

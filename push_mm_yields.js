@@ -108,10 +108,11 @@ function serialToISO(serial) {
     const o = rows[r]; if (!o) continue;
     const manco = (o.A || '').trim(), fund = (o.B || '').trim();
     if (!manco || !fund) continue;                 // stops at the notes rows (blank B)
-    const mn = Number(o.I);
+    const mn = Number(o.I), eff = Number(o.D);
     funds.push({
       manco, fund_class: fund,
       monthly_nominal: isFinite(mn) ? +(mn * 100).toFixed(4) : null,
+      eff_7day: isFinite(eff) ? +(eff * 100).toFixed(4) : null,
       rate_date: serialToISO(o.C),
       rank: isFinite(Number(o.G)) ? Number(o.G) : null,
       updated_at: new Date().toISOString(),
@@ -120,7 +121,7 @@ function serialToISO(serial) {
   if (!funds.length) throw new Error('no fund rows parsed');
 
   console.log(`Parsed ${funds.length} funds:`);
-  funds.forEach(f => console.log(`  ${f.rank ?? '?'}. ${f.fund_class.padEnd(20)} ${f.monthly_nominal}%  (${f.rate_date})`));
+  funds.forEach(f => console.log(`  ${f.rank ?? '?'}. ${f.fund_class.padEnd(20)} nom ${f.monthly_nominal}%  7d-eff ${f.eff_7day}%  (${f.rate_date})`));
 
   if (DRY) { console.log('\n--dry: not pushing.'); return; }
 

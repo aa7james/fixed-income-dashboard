@@ -7,11 +7,13 @@ create table if not exists public.mm_yields (
   manco           text not null,
   fund_class      text not null unique,
   monthly_nominal numeric,          -- % p.a., monthly nominal (NACM)
+  eff_7day        numeric,          -- % p.a., 7-day effective (NACA)
   rate_date       date,
   rank            int,
   updated_at      timestamptz not null default now()
 );
 
+alter table public.mm_yields add column if not exists eff_7day numeric; -- for existing tables
 alter table public.mm_yields enable row level security;
 drop policy if exists "mm_yields read"  on public.mm_yields;
 drop policy if exists "mm_yields write" on public.mm_yields;
