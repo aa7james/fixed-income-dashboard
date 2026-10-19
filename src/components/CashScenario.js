@@ -5,6 +5,7 @@ import {
 import ResizableChart from './ResizableChart';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
 import { fmtMonths } from './axisFormat';
+import { loadMMYields } from '../utils/supabase';
 
 // User-built cash scenario comparator: add as many options as you like, each
 // built from one or more legs (a "roll" is just an extra leg with the rate you
@@ -323,6 +324,17 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
   const [topN, setTopN] = useState(10);
   const [minYield, setMinYield] = useState(7.8);
   const [maxTenor, setMaxTenor] = useState(0); // 0 = any; else longest single leg allowed (months)
+
+  // Money-market yield reference (read-only) — pulled from Supabase, kept fresh by a PC task.
+  const [mmRef, setMmRef] = useState([]);
+  const [mmRefState, setMmRefState] = useState('idle'); // idle | loading | ok | error
+  const [mmRefOpen, setMmRefOpen] = useState(false);
+  const loadMMRef = React.useCallback(async () => {
+    setMmRefState('loading');
+    try { setMmRef(await loadMMYields()); setMmRefState('ok'); }
+    catch { setMmRefState('error'); }
+  }, []);
+  useEffect(() => { loadMMRef(); }, [loadMMRef]);
   // Fund-eligible universe: only ladders whose every leg is within the max tenor.
   const eligible = useMemo(() => {
     if (!maxTenor) return ranked;
@@ -400,6 +412,61 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
             </div>
           );
         })}
+
+        {/* Reference: latest manco yields from the tracker (read-only, type the value in manually) */}
+        <div style={{ marginTop: mmFunds.length ? 12 : 0, paddingTop: 12, borderTop: '1px dashed #5b21b6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => setMmRefOpen(o => !o)} style={{ ...btn, fontSize: 12, padding: '5px 10px', background: '#1e293b', color: '#c4b5fd', fontWeight: 700 }}>
+              {mmRefOpen ? '▾' : '▸'} Latest fund yields (reference)
+            </button>
+            <button onClick={loadMMRef} disabled={mmRefState === 'loading'} title="Pull the latest yields from the tracker"
+              style={{ ...btn, fontSize: 12, padding: '5px 10px', background: '#7c3aed', fontWeight: 700 }}>
+              {mmRefState === 'loading' ? '⟳ Updating…' : '⟳ Update'}
+            </button>
+            {mmRefState === 'ok' && mmRef.length > 0 && (
+              <span style={{ fontSize: 11, color: '#64748b' }}>
+                updated {new Date(Math.max(...mmRef.map(x => new Date(x.updated_at).getTime()))).toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            {mmRefState === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>Couldn't load — run the setup SQL, or try again.</span>}
+          </div>
+
+          {mmRefOpen && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
+                Monthly nominal (NACM) from the manco tracker — <strong style={{ color: '#c4b5fd' }}>reference only</strong>. Type the value into a fund above to use it.
+              </div>
+              {mmRef.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#64748b' }}>No reference yields yet. Run the setup SQL, then press Update.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, color: '#e2e8f0' }}>
+                  <thead>
+                    <tr style={{ color: '#94a3b8' }}>
+                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>Manco</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>Fund / Class</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'right' }}>Monthly nominal</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'right' }}>Rate date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mmRef.map((f, i) => (
+                      <tr key={f.fund_class} style={{ borderTop: '1px solid #1e293b' }}>
+                        <td style={{ padding: '5px 8px', textAlign: 'left', color: '#94a3b8' }}>{f.manco}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'left', color: i === 0 ? '#4ade80' : '#e2e8f0', fontWeight: i === 0 ? 700 : 400 }}>{f.fund_class}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: '#c4b5fd' }}>
+                          {f.monthly_nominal != null ? `${Number(f.monthly_nominal).toFixed(2)}%` : '—'}
+                        </td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', color: '#64748b' }}>
+                          {f.rate_date ? new Date(f.rate_date).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' }) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* option cards (collapsible) */}
@@ -508,6 +575,53 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
       </div>
       </>)}
 
+      {/* ranked summary */}
+      {results.length > 1 && (
+        <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1' }}>
+              Ranking (best first){maxTenor ? ` — within ≤${maxTenor}m` : ''} · {eligible.length} option{eligible.length === 1 ? '' : 's'}
+            </div>
+            <div style={{ fontSize: 11, color: '#fbbf24' }}>✎ amber = your manual option</div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
+            <thead>
+              <tr style={{ color: '#94a3b8' }}>
+                <th style={{ padding: '6px 8px', textAlign: 'left' }}>#</th>
+                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Option</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Horizon</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Interest</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Effective % p.a.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eligible.map((r, i) => {
+                const manual = isManual(r.id);
+                const color = manual ? '#fbbf24' : (i === 0 ? '#4ade80' : '#e2e8f0');
+                const weight = (manual || i === 0) ? 700 : 400;
+                return (
+                  <tr key={r.id} style={{ borderTop: '1px solid #1e293b', color, fontWeight: weight }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'left' }}>{i + 1}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'left' }}>{manual ? '✎ ' : ''}{r.name}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.months} mo</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zar.format(r.interest)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.annualised.toFixed(2)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {mixedHorizons && (
+            <p style={{ fontSize: 12, color: '#fbbf24', margin: '8px 0 0' }}>
+              ⚠ Options cover different horizons — the ranking uses "Effective % p.a." so they're comparable. The rand interest is over each option's own horizon.
+            </p>
+          )}
+          <p style={{ fontSize: 11, color: '#475569', margin: '8px 0 0' }}>
+            Money-market simple interest per leg, compounded across legs. Ignores day-count precision, tax and any bid/offer.
+          </p>
+        </div>
+      )}
+
       {/* value over time of each option you've built */}
       {chartData.length > 1 && (
         <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
@@ -559,53 +673,6 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
               })}
             </LineChart>
           </ResizableChart>
-        </div>
-      )}
-
-      {/* ranked summary */}
-      {results.length > 1 && (
-        <div style={{ marginTop: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1' }}>
-              Ranking (best first){maxTenor ? ` — within ≤${maxTenor}m` : ''} · {eligible.length} option{eligible.length === 1 ? '' : 's'}
-            </div>
-            <div style={{ fontSize: 11, color: '#fbbf24' }}>✎ amber = your manual option</div>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
-            <thead>
-              <tr style={{ color: '#94a3b8' }}>
-                <th style={{ padding: '6px 8px', textAlign: 'left' }}>#</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Option</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Horizon</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Interest</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Effective % p.a.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eligible.map((r, i) => {
-                const manual = isManual(r.id);
-                const color = manual ? '#fbbf24' : (i === 0 ? '#4ade80' : '#e2e8f0');
-                const weight = (manual || i === 0) ? 700 : 400;
-                return (
-                  <tr key={r.id} style={{ borderTop: '1px solid #1e293b', color, fontWeight: weight }}>
-                    <td style={{ padding: '6px 8px', textAlign: 'left' }}>{i + 1}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'left' }}>{manual ? '✎ ' : ''}{r.name}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.months} mo</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zar.format(r.interest)}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.ev.annualised.toFixed(2)}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {mixedHorizons && (
-            <p style={{ fontSize: 12, color: '#fbbf24', margin: '8px 0 0' }}>
-              ⚠ Options cover different horizons — the ranking uses "Effective % p.a." so they're comparable. The rand interest is over each option's own horizon.
-            </p>
-          )}
-          <p style={{ fontSize: 11, color: '#475569', margin: '8px 0 0' }}>
-            Money-market simple interest per leg, compounded across legs. Ignores day-count precision, tax and any bid/offer.
-          </p>
         </div>
       )}
 

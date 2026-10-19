@@ -5,6 +5,16 @@ const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Fetch the Money Market yield reference (populated from the manco tracker by a PC task).
+export async function loadMMYields() {
+  const { data, error } = await supabase
+    .from('mm_yields')
+    .select('manco, fund_class, monthly_nominal, rate_date, rank, updated_at')
+    .order('rank', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 // Fetch all instruments metadata from Supabase
 export async function loadInstruments() {
   const { data, error } = await supabase
