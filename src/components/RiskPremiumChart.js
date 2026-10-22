@@ -9,9 +9,10 @@ import styles from './YieldCurve.module.css';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
 import { makeDateFmt, dateSpanDays } from './axisFormat';
 
-const SA   = 'SA Generic 10 year';
-const US   = 'US Generic 10 year';
-const YANK = 'SOAF Yankee Bond';
+const SA     = 'SA Generic 10 year';
+const US     = 'US 10Y Treasury';      // Bloomberg renamed the US 10y to this (~Aug 2026)
+const US_OLD = 'US Generic 10 year';   // older rows carry the US 10y under this name
+const YANK   = 'SOAF Yankee Bond';
 
 const PERIODS = ['1Y', '2Y', '5Y', 'ALL'];
 const CREDIT_COLOR   = '#fb923c'; // orange
@@ -48,7 +49,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
   const chartData = useMemo(() => {
     const rows = filterByPeriod(dataRows, period);
     return rows.map(row => {
-      const sa = row[SA], us = row[US], yank = row[YANK];
+      const sa = row[SA], us = row[US] ?? row[US_OLD], yank = row[YANK];
       if (sa == null || us == null || yank == null) {
         return { dateStr: row.dateStr, currency: null, credit: null };
       }

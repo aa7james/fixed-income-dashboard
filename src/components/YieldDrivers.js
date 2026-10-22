@@ -79,7 +79,12 @@ function DriverRow({ r, noteOpen, confirming, onToggleNote, onEdit, onCycleColor
   );
 }
 
-export default function YieldDrivers() {
+export default function YieldDrivers({ sa10y = null, us10y = null }) {
+  const liveSub = (key) => {
+    const y = key === 'SA' ? sa10y : key === 'US' ? us10y : null;
+    const r = REGIONS.find(x => x.key === key);
+    return (y != null && isFinite(y)) ? `10y ${y.toFixed(2)}%` : (r ? r.sub : '');
+  };
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | setup | error
   const [savedAt, setSavedAt] = useState(null);
@@ -177,7 +182,7 @@ export default function YieldDrivers() {
             >
               <span style={{ fontSize: 10, color: '#94a3b8' }}>{open ? '▾' : '▸'}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', flex: 1 }}>{reg.title}</span>
-              <span style={{ fontSize: 10, color: '#64748b' }}>{reg.sub}</span>
+              <span style={{ fontSize: 10, color: '#64748b' }}>{liveSub(reg.key)}</span>
               <span style={{ fontSize: 10.5, color: off ? '#f87171' : '#94a3b8', fontVariantNumeric: 'tabular-nums', minWidth: 28, textAlign: 'right' }}>{total.toFixed(0)}%</span>
             </div>
             {open && (

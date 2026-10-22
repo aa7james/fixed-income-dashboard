@@ -173,6 +173,27 @@ const SpreadTooltip = ({ active, payload }) => {
 export default function YieldCurve({ data, instruments, packItems = [], onTogglePack, isInPack, packMode = false, packConfig = null }) {
   const latest = data.dataRows[data.dataRows.length - 1];
 
+  // Live 10y yields for the "Why are yields here?" panel labels.
+  const live10y = useMemo(() => {
+    if (!latest) return { sa10: null, us10: null };
+    const pts = (instruments || [])
+      .filter(i => i.category === 'Government Bonds' && i.maturity_date
+        && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
+      .map(i => ({ x: (new Date(i.maturity_date) - latest.date) / (365.25 * 24 * 3600 * 1000), y: Number(latest[i.name]) }))
+      .filter(p => p.x > 0).sort((a, b) => a.x - b.x);
+    let sa10 = null;
+    if (pts.length) {
+      if (10 <= pts[0].x) sa10 = pts[0].y;
+      else if (10 >= pts[pts.length - 1].x) sa10 = pts[pts.length - 1].y;
+      else for (let k = 1; k < pts.length; k++) {
+        if (10 <= pts[k].x) { const a = pts[k - 1], b = pts[k]; sa10 = a.y + (10 - a.x) / (b.x - a.x) * (b.y - a.y); break; }
+      }
+    }
+    const us = Number(latest['US 10Y Treasury']);
+    const us10 = (isFinite(us) && us > 0.2 && us < 40) ? us : null;
+    return { sa10, us10 };
+  }, [latest, instruments]);
+
   const defaultCategories = Object.fromEntries(Object.entries(CURVE_CATEGORIES).map(([k, v]) => [k, v.defaultOn]));
 
   // Load saved prefs from localStorage
@@ -355,7 +376,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     <div>
       {!packMode && (
         <div className={styles.driversGutter}>
-          <YieldDrivers />
+          <YieldDrivers sa10y={live10y.sa10} us10y={live10y.us10} />
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
