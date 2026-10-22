@@ -87,11 +87,19 @@ export default function ModelPortfolio({ data, instruments }) {
   const save = async () => {
     const row = { name, benchmark: BENCHMARK, start_date: startDate || null, holdings };
     setStatus('Saving…');
+    let error, ins;
     try {
-      if (selId) await supabase.from('model_portfolios').update(row).eq('id', selId);
-      else { const { data: ins } = await supabase.from('model_portfolios').insert(row).select().single(); if (ins) setSelId(ins.id); }
-      setStatus('Saved ✓'); loadList(); setTimeout(() => setStatus(''), 2500);
-    } catch { setStatus('Save failed — did you run the SQL to create the table?'); }
+      if (selId) ({ error } = await supabase.from('model_portfolios').update(row).eq('id', selId));
+      else ({ data: ins, error } = await supabase.from('model_portfolios').insert(row).select().single());
+    } catch (e) { error = e; }
+    if (error) {
+      setStatus(/schema cache|does not exist|PGRST205/i.test(error.message || '')
+        ? "Save failed — the portfolios table isn't set up yet. Run setup_model_portfolios.sql in Supabase."
+        : `Save failed: ${error.message || 'unknown error'}`);
+      return;                                   // do NOT claim success
+    }
+    if (ins) setSelId(ins.id);
+    setStatus('Saved ✓'); loadList(); setTimeout(() => setStatus(''), 2500);
   };
   const del = async () => {
     if (!selId) return;
