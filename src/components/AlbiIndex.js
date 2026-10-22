@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
 import ALBI_HISTORY from '../data/albiHistory.json';
+import { supabase } from '../utils/supabase';
+
+const SNAP_TABLE = 'albi_snapshots';
 
 // ALBI constituents (FTSE/JSE All Bond Index), effective 2026-09-04.
 // [code, issuer, coupon %, maturity, raw index weight]. Update monthly from the
@@ -140,33 +143,80 @@ const metricCard = (label, value, sub) => (
 export default function AlbiIndex({ data, instruments }) {
   const latest = data?.dataRows?.length ? data.dataRows[data.dataRows.length - 1] : null;
 
-  // Uploaded snapshots accumulate, keyed by their as-at month: { [asAt]: rows }.
+  // Uploaded snapshots live in Supabase (permanent + shared), keyed by as-at
+  // date: { [asAt]: rows }. localStorage is kept only as a fast local cache.
   const [uploads, setUploads] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(LS_KEY));
-      if (raw?.uploads) return raw.uploads;                               // new multi format
-      if (raw?.rows?.length && raw?.asAt) return { [raw.asAt]: raw.rows }; // migrate old single
+      if (raw?.uploads) return raw.uploads;
+      if (raw?.rows?.length && raw?.asAt) return { [raw.asAt]: raw.rows };
     } catch { /* ignore */ }
     return {};
   });
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploadErr, setUploadErr] = useState(false);
-  const persistUploads = (next) => { try { localStorage.setItem(LS_KEY, JSON.stringify({ uploads: next })); } catch { /* ignore */ } };
+  const [busy, setBusy] = useState(false);
+  const cacheUploads = (next) => { try { localStorage.setItem(LS_KEY, JSON.stringify({ uploads: next })); } catch { /* ignore */ } };
+
+  // On mount: load snapshots from Supabase, migrating any browser-only ones up.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      let local = {};
+      try {
+        const raw = JSON.parse(localStorage.getItem(LS_KEY));
+        if (raw?.uploads) local = raw.uploads;
+        else if (raw?.rows?.length && raw?.asAt) local = { [raw.asAt]: raw.rows };
+      } catch { /* ignore */ }
+      const { data: rows, error } = await supabase.from(SNAP_TABLE).select('as_at, rows');
+      if (!alive) return;
+      if (error) {
+        if (/schema cache|does not exist|PGRST205/i.test(error.message || '')) {
+          setUploadErr(true);
+          setUploadMsg("Uploaded ALBI isn't permanent yet — run setup_albi_snapshots.sql in Supabase, then re-upload.");
+        }
+        return; // keep the local cache in state
+      }
+      const map = {};
+      (rows || []).forEach(r => { map[r.as_at] = r.rows; });
+      // Push any browser-only months into Supabase so they become permanent.
+      const toMigrate = Object.entries(local).filter(([d]) => !(d in map) && Array.isArray(local[d]) && local[d].length);
+      if (toMigrate.length) {
+        const { error: mErr } = await supabase.from(SNAP_TABLE)
+          .upsert(toMigrate.map(([as_at, r]) => ({ as_at, rows: r })), { onConflict: 'as_at' });
+        if (!mErr) toMigrate.forEach(([d, r]) => { map[d] = r; });
+      }
+      if (!alive) return;
+      setUploads(map); cacheUploads(map);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const onUpload = (e) => {
     const files = [...(e.target.files || [])];
     e.target.value = '';
     if (!files.length) return;
+    setBusy(true); setUploadErr(false); setUploadMsg('Saving…');
     const added = {}; const errs = [];
     let pending = files.length;
-    const finish = () => {
-      if (Object.keys(added).length) {
-        setUploads(prev => { const next = { ...prev, ...added }; persistUploads(next); return next; });
+    const finish = async () => {
+      const entries = Object.entries(added);
+      if (entries.length) {
+        const { error } = await supabase.from(SNAP_TABLE)
+          .upsert(entries.map(([as_at, rows]) => ({ as_at, rows, updated_at: new Date().toISOString() })), { onConflict: 'as_at' });
+        if (error) {
+          setBusy(false); setUploadErr(true);
+          setUploadMsg(/schema cache|does not exist|PGRST205/i.test(error.message || '')
+            ? "Can't save — run setup_albi_snapshots.sql in Supabase first."
+            : `Save failed: ${error.message}`);
+          return;
+        }
+        setUploads(prev => { const next = { ...prev, ...added }; cacheUploads(next); return next; });
       }
       const months = Object.keys(added).sort();
-      setUploadErr(!months.length);
+      setBusy(false); setUploadErr(!months.length && !!errs.length);
       setUploadMsg(
-        (months.length ? `Loaded ${months.length} month${months.length === 1 ? '' : 's'}: ${months.join(', ')}.` : '')
+        (months.length ? `Saved ${months.length} month${months.length === 1 ? '' : 's'}: ${months.join(', ')}.` : '')
         + (errs.length ? `${months.length ? ' ' : ''}${errs.length} failed: ${errs.join('; ')}` : '')
       );
     };
@@ -181,14 +231,16 @@ export default function AlbiIndex({ data, instruments }) {
       reader.readAsText(file);
     });
   };
-  const resetBuiltIn = () => {
-    setUploads({});
-    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
-    setUploadErr(false);
-    setUploadMsg('Cleared uploaded months — showing built-in history.');
+
+  const removeSnapshot = async (date) => {
+    setBusy(true);
+    const { error } = await supabase.from(SNAP_TABLE).delete().eq('as_at', date);
+    setBusy(false);
+    if (error) { setUploadErr(true); setUploadMsg(`Could not remove: ${error.message}`); return; }
+    setUploads(prev => { const next = { ...prev }; delete next[date]; cacheUploads(next); return next; });
+    setUploadErr(false); setUploadMsg(`Removed ${monthLabel(date)}.`);
   };
   const uploadedSet = useMemo(() => new Set(Object.keys(uploads)), [uploads]);
-  const custom = uploadedSet.size > 0;
 
   const [auctionCodes, setAuctionCodes] = useState(() => { try { return localStorage.getItem('albiAuctionCodes') || ''; } catch { return ''; } });
   const setAuction = (v) => { setAuctionCodes(v); try { localStorage.setItem('albiAuctionCodes', v); } catch { /* ignore */ } };
@@ -270,12 +322,12 @@ export default function AlbiIndex({ data, instruments }) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <label style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', background: '#0ea5e9', color: '#fff' }}>
-              ⬆ Update from CSV
-              <input type="file" accept=".csv,text/csv" multiple onChange={onUpload} style={{ display: 'none' }} />
+            <label style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: busy ? 'default' : 'pointer', background: busy ? '#334155' : '#0ea5e9', color: '#fff', opacity: busy ? 0.7 : 1 }}>
+              {busy ? '… saving' : '⬆ Update from CSV'}
+              <input type="file" accept=".csv,text/csv" multiple disabled={busy} onChange={onUpload} style={{ display: 'none' }} />
             </label>
-            {custom && <button onClick={resetBuiltIn} title="Revert to the built-in constituents"
-              style={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: '1px solid #334155', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>↺ Built‑in</button>}
+            {uploadedSet.has(sel.date) && <button onClick={() => removeSnapshot(sel.date)} disabled={busy} title="Delete this uploaded month (permanent)"
+              style={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: '1px solid #7f1d1d', background: 'transparent', color: '#f87171', cursor: busy ? 'default' : 'pointer' }}>✕ Remove {monthLabel(sel.date)}</button>}
           </div>
           {uploadMsg && <span style={{ fontSize: 10, color: uploadErr ? '#f87171' : '#4ade80' }}>{uploadMsg}</span>}
         </div>
