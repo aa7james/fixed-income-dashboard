@@ -140,32 +140,55 @@ const metricCard = (label, value, sub) => (
 export default function AlbiIndex({ data, instruments }) {
   const latest = data?.dataRows?.length ? data.dataRows[data.dataRows.length - 1] : null;
 
-  const [store, setStore] = useState(() => {
-    try { const s = JSON.parse(localStorage.getItem(LS_KEY)); if (s?.rows?.length) return s; } catch { /* ignore */ }
-    return { rows: ALBI, asAt: AS_AT };
+  // Uploaded snapshots accumulate, keyed by their as-at month: { [asAt]: rows }.
+  const [uploads, setUploads] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LS_KEY));
+      if (raw?.uploads) return raw.uploads;                               // new multi format
+      if (raw?.rows?.length && raw?.asAt) return { [raw.asAt]: raw.rows }; // migrate old single
+    } catch { /* ignore */ }
+    return {};
   });
   const [uploadMsg, setUploadMsg] = useState('');
+  const [uploadErr, setUploadErr] = useState(false);
+  const persistUploads = (next) => { try { localStorage.setItem(LS_KEY, JSON.stringify({ uploads: next })); } catch { /* ignore */ } };
+
   const onUpload = (e) => {
-    const file = e.target.files?.[0];
+    const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = parseAlbiCsv(String(reader.result));
-        setStore(parsed);
-        try { localStorage.setItem(LS_KEY, JSON.stringify(parsed)); } catch { /* ignore */ }
-        setUploadMsg(`Loaded ${parsed.rows.length} constituents (as at ${parsed.asAt}).`);
-      } catch (err) { setUploadMsg(`Could not read file: ${err.message}`); }
+    if (!files.length) return;
+    const added = {}; const errs = [];
+    let pending = files.length;
+    const finish = () => {
+      if (Object.keys(added).length) {
+        setUploads(prev => { const next = { ...prev, ...added }; persistUploads(next); return next; });
+      }
+      const months = Object.keys(added).sort();
+      setUploadErr(!months.length);
+      setUploadMsg(
+        (months.length ? `Loaded ${months.length} month${months.length === 1 ? '' : 's'}: ${months.join(', ')}.` : '')
+        + (errs.length ? `${months.length ? ' ' : ''}${errs.length} failed: ${errs.join('; ')}` : '')
+      );
     };
-    reader.readAsText(file);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try { const parsed = parseAlbiCsv(String(reader.result)); added[parsed.asAt] = parsed.rows; }
+        catch (err) { errs.push(`${file.name}: ${err.message}`); }
+        if (--pending === 0) finish();
+      };
+      reader.onerror = () => { errs.push(`${file.name}: read error`); if (--pending === 0) finish(); };
+      reader.readAsText(file);
+    });
   };
   const resetBuiltIn = () => {
-    setStore({ rows: ALBI, asAt: AS_AT });
+    setUploads({});
     try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
-    setUploadMsg('Reverted to the built-in constituents.');
+    setUploadErr(false);
+    setUploadMsg('Cleared uploaded months — showing built-in history.');
   };
-  const custom = store.asAt !== AS_AT || store.rows !== ALBI;
+  const uploadedSet = useMemo(() => new Set(Object.keys(uploads)), [uploads]);
+  const custom = uploadedSet.size > 0;
 
   const [auctionCodes, setAuctionCodes] = useState(() => { try { return localStorage.getItem('albiAuctionCodes') || ''; } catch { return ''; } });
   const setAuction = (v) => { setAuctionCodes(v); try { localStorage.setItem('albiAuctionCodes', v); } catch { /* ignore */ } };
@@ -176,9 +199,10 @@ export default function AlbiIndex({ data, instruments }) {
   const snapshots = useMemo(() => {
     const map = new Map();
     ALBI_HISTORY.forEach(s => map.set(s.date, s.rows));
-    if (store.rows?.length && store.asAt) map.set(store.asAt, store.rows);
+    map.set(AS_AT, ALBI);                                                   // built-in current month
+    Object.entries(uploads).forEach(([date, rows]) => { if (rows?.length) map.set(date, rows); }); // uploads override
     return [...map.entries()].map(([date, rows]) => ({ date, rows })).sort((a, b) => (a.date < b.date ? -1 : 1));
-  }, [store]);
+  }, [uploads]);
   const [selDate, setSelDate] = useState('');
   const sel = snapshots.find(s => s.date === selDate) || snapshots[snapshots.length - 1];
 
@@ -239,7 +263,7 @@ export default function AlbiIndex({ data, instruments }) {
             <span style={{ fontSize: 12, color: '#94a3b8' }}>As at:</span>
             <select value={sel.date} onChange={e => setSelDate(e.target.value)}
               style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }}>
-              {[...snapshots].reverse().map(s => <option key={s.date} value={s.date}>{monthLabel(s.date)}{custom && s.date === store.asAt ? ' (uploaded)' : ''}</option>)}
+              {[...snapshots].reverse().map(s => <option key={s.date} value={s.date}>{monthLabel(s.date)}{uploadedSet.has(s.date) ? ' (uploaded)' : ''}</option>)}
             </select>
             <span style={{ fontSize: 11, color: '#64748b' }}>{snapshots.length} months of history</span>
           </div>
@@ -248,12 +272,12 @@ export default function AlbiIndex({ data, instruments }) {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', background: '#0ea5e9', color: '#fff' }}>
               ⬆ Update from CSV
-              <input type="file" accept=".csv,text/csv" onChange={onUpload} style={{ display: 'none' }} />
+              <input type="file" accept=".csv,text/csv" multiple onChange={onUpload} style={{ display: 'none' }} />
             </label>
             {custom && <button onClick={resetBuiltIn} title="Revert to the built-in constituents"
               style={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: '1px solid #334155', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>↺ Built‑in</button>}
           </div>
-          {uploadMsg && <span style={{ fontSize: 10, color: uploadMsg.startsWith('Could not') ? '#f87171' : '#4ade80' }}>{uploadMsg}</span>}
+          {uploadMsg && <span style={{ fontSize: 10, color: uploadErr ? '#f87171' : '#4ade80' }}>{uploadMsg}</span>}
         </div>
       </div>
 
