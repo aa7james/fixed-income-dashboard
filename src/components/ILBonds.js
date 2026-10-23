@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import LinkerScenario from './LinkerScenario';
 
 const cell = (x = {}) => ({ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', ...x });
 
@@ -189,6 +190,8 @@ export default function ILBonds({ data, instruments }) {
           Real‑yield <strong>%ile</strong> = where today's real yield sits in its 3‑year range (higher = cheaper linker). Nominal comparison uses a par bond at the ILB's maturity off the govie curve. Semi‑annual, ACT/365, full reprice. ⚠️ = unverified reference data. I2050 coupon corrected to 2.50% in this view (DB still shows 10.50% — fix at source). Caveat: real yields are usually less volatile than nominal yields, so higher duration overstates the realised price‑risk gap.
         </p>
       </div>
+
+      <LinkerScenario data={data} instruments={instruments} />
     </div>
   );
 }
