@@ -45,6 +45,9 @@ export default function ILBonds({ data, instruments }) {
   const [inflLong, setInflLong] = useState('');    // 20y+ inflation view (blank = 4.5 SARB mid)
   const sVal = inflShort === '' || isNaN(Number(inflShort)) ? cpiLive : Number(inflShort);
   const lVal = inflLong === '' || isNaN(Number(inflLong)) ? 4.5 : Number(inflLong);
+  const [shockBps, setShockBps] = useState('100'); // yield-move shock for the price-risk column (bps)
+  const shockBpsN = shockBps === '' || isNaN(Number(shockBps)) ? 100 : Number(shockBps);
+  const shockDy = shockBpsN / 100; // in %-points
 
   const rows = useMemo(() => {
     if (!latest || !instruments?.length) return [];
@@ -86,12 +89,12 @@ export default function ILBonds({ data, instruments }) {
       const pctile = hist.length > 20 ? (hist.filter(v => v <= realY).length / hist.length) * 100 : null;
       return {
         label: i.display_label || i.name, suspect: SUSPECT.has(i.name), maturity: i.maturity_date, N, c, realY, nomY, breakeven, expI, inflEdge,
-        realDur: modDuration(realY, N, c), realHit: priceMove(realY, N, c, 1),
-        nomHit: nomY != null ? priceMove(nomY, N, nomY, 1) : null,
+        realDur: modDuration(realY, N, c), realHit: priceMove(realY, N, c, shockDy),
+        nomHit: nomY != null ? priceMove(nomY, N, nomY, shockDy) : null,
         ilbTR, nomTR, trEdge, pctile, histLo: hist.length ? Math.min(...hist) : null, histHi: hist.length ? Math.max(...hist) : null,
       };
     }).filter(r => r.N > 1).sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, allRows, sVal, lVal]);
+  }, [latest, instruments, allRows, sVal, lVal, shockDy]);
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
@@ -113,6 +116,10 @@ export default function ILBonds({ data, instruments }) {
         <span style={{ fontSize: 12, color: '#94a3b8' }}>%  ·  long‑term (20y+)</span>
         <input type="number" step="0.1" value={inflLong} placeholder="4.5" onChange={e => setInflLong(e.target.value)} style={inputStyle} />
         <span style={{ fontSize: 12, color: '#64748b' }}>% · interpolated by maturity · live CPI {cpiLive.toFixed(1)}%, SARB band 3–6%</span>
+        <span style={{ width: 1, height: 18, background: '#334155', margin: '0 2px' }} />
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Price‑risk yield shock</span>
+        <input type="number" step="5" value={shockBps} placeholder="100" onChange={e => setShockBps(e.target.value)} style={inputStyle} />
+        <span style={{ fontSize: 12, color: '#64748b' }}>bp (last column)</span>
       </div>
 
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
@@ -137,7 +144,7 @@ export default function ILBonds({ data, instruments }) {
                 <th style={cell()}>Nominal</th>
                 <th style={cell()}>Edge</th>
                 <th style={cell()}>Real dur.</th>
-                <th style={cell()}>Price +1%</th>
+                <th style={cell()}>Price +{shockBpsN}bp</th>
               </tr>
             </thead>
             <tbody>
@@ -176,7 +183,7 @@ export default function ILBonds({ data, instruments }) {
           <strong style={{ color: '#38bdf8' }}>Breakeven</strong> = nominal yield (at the ILB's maturity) − real yield; the market's implied average inflation (plus an inflation‑risk premium, minus a liquidity premium — so it's a hurdle, not a pure forecast).
           <strong style={{ color: '#4ade80' }}> ILB edge</strong> = your expected inflation (maturity‑matched) − breakeven: positive = ILB wins on the inflation call.
           <strong style={{ color: '#2dd4bf' }}> 1‑year total return</strong>: ILB = real carry + roll, grossed up by near‑term inflation; nominal = carry + roll. <strong>Edge</strong> = ILB − nominal over the next year.
-          <strong style={{ color: '#fbbf24' }}> Real dur.</strong> & <strong style={{ color: '#f87171' }}>Price +1%</strong> show the linker's price sensitivity to real yields (nominal bond's shown in brackets) — linkers run higher because of tiny real coupons.
+          <strong style={{ color: '#fbbf24' }}> Real dur.</strong> & <strong style={{ color: '#f87171' }}>Price +{shockBpsN}bp</strong> shows the <strong>linker's</strong> price change for that rise in its real yield (the comparable nominal bond's change for the same-size move in its nominal yield is in brackets) — linkers run higher because of tiny real coupons. Edit the shock above to model any move.
         </p>
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
           Real‑yield <strong>%ile</strong> = where today's real yield sits in its 3‑year range (higher = cheaper linker). Nominal comparison uses a par bond at the ILB's maturity off the govie curve. Semi‑annual, ACT/365, full reprice. ⚠️ = unverified reference data. I2050 coupon corrected to 2.50% in this view (DB still shows 10.50% — fix at source). Caveat: real yields are usually less volatile than nominal yields, so higher duration overstates the realised price‑risk gap.
