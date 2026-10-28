@@ -104,6 +104,13 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
     try { localStorage.setItem(LS_KEY, JSON.stringify(custom)); } catch { /* ignore */ }
   }, [custom]);
 
+  // Fixed Deposits = NCD rate + a flat premium (non-negotiable, so a small
+  // illiquidity pick-up). Off by default; derived, not a separate feed.
+  const [fdOn, setFdOn] = useState(() => { try { return localStorage.getItem('fdOn') === '1'; } catch { return false; } });
+  const [fdBps, setFdBps] = useState(() => { try { return localStorage.getItem('fdPremiumBps') || '5'; } catch { return '5'; } });
+  useEffect(() => { try { localStorage.setItem('fdOn', fdOn ? '1' : '0'); localStorage.setItem('fdPremiumBps', String(fdBps)); } catch { /* ignore */ } }, [fdOn, fdBps]);
+  const fdPrem = (Number(fdBps) || 0) / 100; // %-points
+
   // Instrument menu with today's rates.
   const menu = useMemo(() => {
     const items = [];
@@ -112,6 +119,11 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
     mk('Call', 'Call', 1); mk('Money Market', 'MM', 1);
     [3, 6, 9, 12].forEach(t => push(`${t}m T-Bill`, `${t}m T-Bill`, t));
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(t => push(`${t}m Fixed NCD`, `${t}m Fixed Rate NCD`, t));
+    // Fixed Deposits: each NCD tenor + the FD premium (only when toggled on).
+    if (fdOn) [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(t => {
+      const v = latest?.[`${t}m Fixed Rate NCD`];
+      if (v != null) items.push({ label: `${t}m Fixed Deposit`, rate: +(Number(v) + fdPrem).toFixed(3), months: t });
+    });
     [3, 6, 9, 12].forEach(t => push(`${t}m JIBAR`, `${t}m JIBAR`, t));
     // Variable NCDs: all-in = Zaronia + spread
     const on = latest?.['Zaronia'];
@@ -128,7 +140,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
     });
     custom.forEach(c => items.push({ label: `★ ${c.label}`, rate: Number(c.rate), months: Number(c.months) }));
     return items;
-  }, [latest, instruments, markers, custom]);
+  }, [latest, instruments, markers, custom, fdOn, fdPrem]);
 
   const findMenu = (label) => menu.find(m => m.label === label);
 
@@ -378,6 +390,18 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
             style={{ ...btn, background: scenInstrument === x ? '#0ea5e9' : '#1e293b', color: scenInstrument === x ? '#fff' : '#94a3b8', fontWeight: scenInstrument === x ? 700 : 400 }}>{x}</button>
         ))}
         <button onClick={() => { setOptions([...generated, ...manualRef.current]); }} style={btn} title="Recompute the FRA-implied ladders (keeps your manual options)">↻ Reset</button>
+        <span style={{ width: 1, height: 18, background: '#334155', margin: '0 4px' }} />
+        <button onClick={() => setFdOn(v => !v)} title="Add Fixed Deposit options (each NCD + the premium) to the instrument pickers"
+          style={{ ...btn, background: fdOn ? '#7c3aed' : '#1e293b', color: fdOn ? '#fff' : '#94a3b8', fontWeight: fdOn ? 700 : 400 }}>
+          {fdOn ? '✓ ' : ''}Fixed Deposits
+        </button>
+        {fdOn && (
+          <span style={{ fontSize: 12, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            NCD +
+            <input type="number" step="1" value={fdBps} onChange={e => setFdBps(e.target.value)} style={{ ...inp, width: 56 }} />
+            bp
+          </span>
+        )}
       </div>
 
       {/* Money market funds — quick add/edit, highlighted so it's obvious */}

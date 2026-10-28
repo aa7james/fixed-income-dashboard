@@ -46,9 +46,13 @@ export default function LinkerScenario({ data, instruments }) {
       .filter(i => i.category === 'Government Bonds' && i.maturity_date && i.coupon != null && sane(latest?.[i.name]))
       .map(i => ({ name: i.name, label: i.display_label || i.name, mat: i.maturity_date, N: yrs(i.maturity_date), y: Number(latest[i.name]), c: Number(i.coupon) * 100 }))
       .filter(x => x.N > 0.05).sort((a, b) => a.N - b.N);
-    const cashes = Object.entries(CASH_TENORS)
+    let fdBps = 5; try { fdBps = Number(localStorage.getItem('fdPremiumBps')) || 5; } catch { /* ignore */ }
+    const ncds = Object.entries(CASH_TENORS)
       .filter(([n]) => sane(latest?.[n]))
       .map(([n, T]) => ({ name: n, label: cashLabel(n), T, rate: Number(latest[n]) }));
+    // Fixed Deposit = NCD + flat premium (non-negotiable pick-up), shown alongside.
+    const fds = ncds.map(c => ({ name: c.name + '_FD', label: c.label.replace(' NCD', ' FD'), T: c.T, rate: +(c.rate + fdBps / 100).toFixed(3) }));
+    const cashes = [...ncds, ...fds];
     const realCurve = linkers.map(x => ({ N: x.N, y: x.y }));
     const nomCurve = nominals.map(x => ({ N: x.N, y: x.y }));
     return { linkers, nominals, cashes, realCurve, nomCurve };
