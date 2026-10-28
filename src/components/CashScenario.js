@@ -224,15 +224,23 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
         out.push({ id: `gen_${parts.join('_')}_${vec.map(v => v === 'NCD' ? 'N' : 'T').join('')}`, name, legs });
       });
     });
+    // Fixed Deposits: pure-FD counterparts of each ladder (NCD rolls priced as FD).
+    // Added automatically when the toggle is on so they rank without any manual build.
+    if (fdOn) COMPS.forEach(parts => {
+      if (!parts.every(T => latest[`${T}m Fixed Rate NCD`] != null)) return;
+      const legs = parts.map(T => ({ label: `${T}m Fixed Deposit`, months: T }));
+      const name = parts.map(T => `FD ${T}m`).join(' → ');
+      out.push({ id: `gen_fd_${parts.join('_')}`, name, legs });
+    });
     return out;
-  }, [latest, scenInstrument]); // eslint-disable-line
+  }, [latest, scenInstrument, fdOn]); // eslint-disable-line
 
   // Load the generated scenarios; reset whenever the data date or instrument changes.
   // Manually-added options (id not starting "gen_") persist across refreshes via localStorage.
   const [options, setOptions] = useState([]);
   const [loadedSig, setLoadedSig] = useState('');
   const manualRef = useRef(loadManualOptions());
-  const sig = `${scenInstrument}|${latest?.dateStr || ''}`;
+  const sig = `${scenInstrument}|${latest?.dateStr || ''}|fd${fdOn ? 1 : 0}`;
   useEffect(() => {
     if (generated.length && sig !== loadedSig) {
       setOptions([...generated, ...manualRef.current]);
@@ -391,7 +399,7 @@ export default function CashScenario({ latest, instruments, markers, fraOverride
         ))}
         <button onClick={() => { setOptions([...generated, ...manualRef.current]); }} style={btn} title="Recompute the FRA-implied ladders (keeps your manual options)">↻ Reset</button>
         <span style={{ width: 1, height: 18, background: '#334155', margin: '0 4px' }} />
-        <button onClick={() => setFdOn(v => !v)} title="Add Fixed Deposit options (each NCD + the premium) to the instrument pickers"
+        <button onClick={() => setFdOn(v => !v)} title="Show Fixed Deposits (each NCD + the premium) in the ranking automatically"
           style={{ ...btn, background: fdOn ? '#7c3aed' : '#1e293b', color: fdOn ? '#fff' : '#94a3b8', fontWeight: fdOn ? 700 : 400 }}>
           {fdOn ? '✓ ' : ''}Fixed Deposits
         </button>
