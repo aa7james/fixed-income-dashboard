@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import ResizableChart from './ResizableChart';
 import CashScenario from './CashScenario';
+import FloaterComparator from './FloaterComparator';
 import VariableNcdSchedule from './VariableNcdSchedule';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
 
@@ -316,6 +317,9 @@ export default function CashTab({ data, instruments }) {
 
       {/* TOP — scenario comparator */}
       <CashScenario latest={latest} instruments={instruments} markers={markers} fraOverrides={fraOverrides} />
+
+      {/* Floater (FRN) comparator — discount margin vs your NCDs */}
+      <FloaterComparator latest={latest} />
 
       {/* SECTION 1 — cash on offer */}
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 }}>
