@@ -319,7 +319,7 @@ export default function CashTab({ data, instruments }) {
       <CashScenario latest={latest} instruments={instruments} markers={markers} fraOverrides={fraOverrides} />
 
       {/* Floater (FRN) comparator — discount margin vs your NCDs */}
-      <FloaterComparator latest={latest} />
+      <FloaterComparator latest={latest} instruments={instruments} fraOverrides={fraOverrides} />
 
       {/* SECTION 1 — cash on offer */}
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, marginBottom: 24 }}>
