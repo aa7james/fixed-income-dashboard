@@ -120,7 +120,7 @@ function buildPoints(catName, row, refDate, instruments) {
       if (y == null) continue;
       const x = yearsTo(refDate, inst.maturity_date);
       if (x <= 0) continue;
-      points.push({ x: +x.toFixed(2), y: +y.toFixed(4), label: inst.display_label || inst.name, name: inst.name });
+      points.push({ x: +x.toFixed(2), y: +y.toFixed(4), label: inst.display_label || inst.name, name: inst.name, coupon: inst.coupon, maturity: inst.maturity_date, meta: bondMeta(inst.name) });
     }
     points.sort((a, b) => a.x - b.x);
   }
@@ -128,15 +128,58 @@ function buildPoints(catName, row, refDate, instruments) {
   return points;
 }
 
+// Issuer / credit description for a bond, derived from its JSE code prefix so it
+// also covers any future same-issuer bonds. Returns null for govies (R-bonds),
+// which keeps their tooltip simple.
+function bondMeta(code) {
+  const c = (code || '').toUpperCase();
+  const mk = (issuer, sector, backing, blurb) => ({ issuer, sector, backing, blurb });
+  if (/^ES/.test(c))   return mk('Eskom Holdings SOC', 'Power utility', 'State-owned enterprise', "SA's state-owned electricity utility — generates & transmits most of the country's power.");
+  if (/^(EL|ECN)/.test(c)) return mk('Eskom Holdings SOC', 'Power utility', 'State-owned (inflation-linked)', "SA's state-owned electricity utility — this is a CPI-linked note.");
+  if (/^TNFG/.test(c)) return mk('Transnet SOC', 'Freight transport', 'Government guaranteed', 'State-owned freight rail, ports & pipelines operator — floating-rate note.');
+  if (/^TNG/.test(c))  return mk('Transnet SOC', 'Freight transport', 'Government guaranteed', 'State-owned freight rail, ports & pipelines operator.');
+  if (/^TN/.test(c))   return mk('Transnet SOC', 'Freight transport', 'Govt-owned, no guarantee', 'State-owned freight rail, ports & pipelines operator.');
+  if (/^HWAY/.test(c)) return mk('SANRAL', 'Toll roads', 'Government guaranteed', 'State roads agency — Gauteng toll-road programme bonds.');
+  if (/^NRA/.test(c))  return mk('SANRAL', 'National roads', 'Govt-owned, no guarantee', 'State roads agency — builds & maintains the national highway network.');
+  if (/^FR/.test(c))   return mk('FirstRand Bank', 'Bank', 'Bank — senior unsecured', "One of SA's big-four banks (FNB & RMB) — senior unsecured debt.");
+  return null;
+}
+
+const backingColor = (b) => {
+  const s = (b || '').toLowerCase();
+  if (s.includes('no guarantee')) return '#fbbf24';
+  if (s.includes('guaranteed')) return '#4ade80';
+  if (s.includes('bank')) return '#38bdf8';
+  return '#94a3b8';
+};
+
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   if (!d) return null;
+  const m = d.meta;
+  const cpn = d.coupon != null && d.coupon !== '' ? `${(Number(d.coupon) * 100).toFixed(2)}% coupon` : null;
+  const matYr = d.maturity ? new Date(d.maturity).getFullYear() : null;
   return (
-    <div className={styles.tooltip}>
-      <p className={styles.tooltipLabel}>{d.label}</p>
-      <p className={styles.tooltipTenor}>{d.x < 1 ? `${Math.round(d.x * 12)}m` : `${d.x.toFixed(1)}y`}</p>
+    <div className={styles.tooltip} style={{ maxWidth: 250 }}>
+      <p className={styles.tooltipLabel}>{d.label}{m?.issuer ? ` · ${m.issuer}` : ''}</p>
+      <p className={styles.tooltipTenor}>
+        {d.x < 1 ? `${Math.round(d.x * 12)}m` : `${d.x.toFixed(1)}y`}{matYr ? ` · matures ${matYr}` : ''}
+      </p>
       <p className={styles.tooltipYield}>{d.y.toFixed(2)}%</p>
+      {m && (
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(148,163,184,0.25)' }}>
+          <p style={{ margin: '0 0 3px', fontSize: 11, color: '#cbd5e1' }}>
+            {[cpn, m.sector].filter(Boolean).join(' · ')}
+          </p>
+          {m.backing && (
+            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: backingColor(m.backing) }}>
+              {m.backing}
+            </p>
+          )}
+          {m.blurb && <p style={{ margin: 0, fontSize: 10.5, color: '#94a3b8', lineHeight: 1.45 }}>{m.blurb}</p>}
+        </div>
+      )}
     </div>
   );
 };
