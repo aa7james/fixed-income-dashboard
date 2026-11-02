@@ -122,6 +122,13 @@ export function computeIndex(constituents, yieldRow, asOfISO, instruments) {
   return { rows: rws, chartRows: rws.filter(r => r.issuer === 'RSA'), metrics, anyProxy: proxy };
 }
 
+// Bond-code label for a line/scatter point; skips null points (combined dataset
+// carries govie rows with no corporate value and vice-versa).
+const PointLabel = ({ x, y, value, fill, dy }) => {
+  if (x == null || y == null || Number.isNaN(+y) || value == null) return null;
+  return <text x={x} y={+y + dy} textAnchor="middle" fill={fill} fontSize={9} fontWeight={700}>{value}</text>;
+};
+
 // Vertical bond-code label drawn upward from the bar's base.
 const BarLabel = ({ x, y, width, height, value }) => {
   if (x == null || width == null) return null;
@@ -283,11 +290,19 @@ export default function AlbiIndex({ data, instruments }) {
   if (!latest) return null;
   if (!rows.length || !metrics) return <div style={{ color: '#64748b', fontSize: 13 }}>ALBI: no yields available yet.</div>;
 
-  // ALBI's own corporate/SOE constituents (Eskom, Transnet, …) — shown as points
-  // on the curve so their credit spread over the govie line is visible.
-  const corpRows = rows.filter(r => r.issuer !== 'RSA' && r.y != null);
-  const maxN = Math.max(...chartRows.map(r => r.N), ...corpRows.map(r => r.N));
-  const yAll = [...chartRows.map(r => r.y), ...corpRows.map(r => r.y)];
+  // One combined dataset (govies + ALBI's own corporate/SOE constituents) so the
+  // tooltip resolves to whichever bond is under the cursor — separate datasets
+  // made it snap to the nearest corporate point. yGov feeds the government line,
+  // yCorp the corporate diamonds, wtBar the weight bars (govies only).
+  const curveData = rows.map(r => ({
+    ...r,
+    yGov: r.issuer === 'RSA' ? r.y : null,
+    yCorp: r.issuer === 'RSA' ? null : r.y,
+    wtBar: r.issuer === 'RSA' ? r.wt : null,
+  }));
+  const hasCorp = curveData.some(r => r.yCorp != null);
+  const maxN = Math.max(...rows.map(r => r.N));
+  const yAll = rows.map(r => r.y);
   const yld = niceTicks(Math.min(...yAll) - 0.3, Math.max(...yAll) + 0.3);
   const wMax = Math.max(...chartRows.map(r => r.wt));
   const wTicks = niceTicks(0, wMax);
@@ -360,7 +375,7 @@ export default function AlbiIndex({ data, instruments }) {
       </div>
 
       <ResizableChart height={360}>
-        <ComposedChart data={chartRows} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
+        <ComposedChart data={curveData} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
           <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
           <XAxis type="number" dataKey="N" domain={[0, Math.ceil(maxN)]} ticks={tenorTicks(maxN)} tickFormatter={fmtTenor}
             tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569"
@@ -372,20 +387,20 @@ export default function AlbiIndex({ data, instruments }) {
             tickFormatter={v => `${v}%`} stroke="#475569" width={46}
             label={{ value: 'Weight', angle: 90, position: 'insideRight', fill: '#a78bfa', fontSize: 11 }} />
           <Tooltip content={<Tip />} />
-          <Bar yAxisId="wt" dataKey="wt" name="Weight" fill="#6d28d9" fillOpacity={0.55} barSize={16} isAnimationActive={false}>
+          <Bar yAxisId="wt" dataKey="wtBar" name="Weight" fill="#6d28d9" fillOpacity={0.55} barSize={16} isAnimationActive={false}>
             <LabelList dataKey="code" content={BarLabel} />
             <LabelList dataKey="code" content={(p) => {
               if (p.x == null || p.width == null || !auctionSet.has(String(p.value).toUpperCase())) return null;
               return <circle cx={p.x + p.width / 2} cy={p.y + p.height + 7} r={4} fill="#f59e0b" stroke="#0f172a" strokeWidth={1} />;
             }} />
           </Bar>
-          <Line yAxisId="yield" type="monotone" dataKey="y" name="Yield" stroke="#38bdf8" strokeWidth={2}
+          <Line yAxisId="yield" type="monotone" dataKey="yGov" name="Yield" stroke="#38bdf8" strokeWidth={2} connectNulls
             dot={{ r: 2.5, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
-            <LabelList dataKey="code" position="top" offset={8} style={{ fill: '#7dd3fc', fontSize: 9, fontWeight: 600 }} />
+            <LabelList dataKey="code" content={(p) => <PointLabel {...p} fill="#7dd3fc" dy={-9} />} />
           </Line>
-          {corpRows.length > 0 && (
-            <Scatter yAxisId="yield" data={corpRows} dataKey="y" name="Corporate / SOE" fill="#fb7185" shape="diamond" isAnimationActive={false}>
-              <LabelList dataKey="code" position="bottom" offset={8} style={{ fill: '#fda4af', fontSize: 9, fontWeight: 700 }} />
+          {hasCorp && (
+            <Scatter yAxisId="yield" dataKey="yCorp" name="Corporate / SOE" fill="#fb7185" shape="diamond" isAnimationActive={false}>
+              <LabelList dataKey="code" content={(p) => <PointLabel {...p} fill="#fda4af" dy={16} />} />
             </Scatter>
           )}
         </ComposedChart>
