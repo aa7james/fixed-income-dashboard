@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from 'recharts';
+import { ComposedChart, Bar, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { niceTicks } from './useYAxisBounds';
 import { fmtTenor, tenorTicks, makeDateFmt, dateSpanDays } from './axisFormat';
@@ -205,10 +205,13 @@ export default function AlbiIndex({ data, instruments }) {
         const { error } = await supabase.from(SNAP_TABLE)
           .upsert(entries.map(([as_at, rows]) => ({ as_at, rows, updated_at: new Date().toISOString() })), { onConflict: 'as_at' });
         if (error) {
+          // Keep the upload in this browser so it isn't lost; the mount effect
+          // auto-syncs it to Supabase once the table exists.
+          setUploads(prev => { const next = { ...prev, ...added }; cacheUploads(next); return next; });
           setBusy(false); setUploadErr(true);
           setUploadMsg(/schema cache|does not exist|PGRST205/i.test(error.message || '')
-            ? "Can't save — run setup_albi_snapshots.sql in Supabase first."
-            : `Save failed: ${error.message}`);
+            ? "Saved in this browser only — run setup_albi_snapshots.sql in Supabase to make it permanent and shared, then reload."
+            : `Saved in this browser only — server save failed: ${error.message}`);
           return;
         }
         setUploads(prev => { const next = { ...prev, ...added }; cacheUploads(next); return next; });
@@ -280,8 +283,12 @@ export default function AlbiIndex({ data, instruments }) {
   if (!latest) return null;
   if (!rows.length || !metrics) return <div style={{ color: '#64748b', fontSize: 13 }}>ALBI: no yields available yet.</div>;
 
-  const maxN = Math.max(...chartRows.map(r => r.N));
-  const yld = niceTicks(Math.min(...chartRows.map(r => r.y)) - 0.3, Math.max(...chartRows.map(r => r.y)) + 0.3);
+  // ALBI's own corporate/SOE constituents (Eskom, Transnet, …) — shown as points
+  // on the curve so their credit spread over the govie line is visible.
+  const corpRows = rows.filter(r => r.issuer !== 'RSA' && r.y != null);
+  const maxN = Math.max(...chartRows.map(r => r.N), ...corpRows.map(r => r.N));
+  const yAll = [...chartRows.map(r => r.y), ...corpRows.map(r => r.y)];
+  const yld = niceTicks(Math.min(...yAll) - 0.3, Math.max(...yAll) + 0.3);
   const wMax = Math.max(...chartRows.map(r => r.wt));
   const wTicks = niceTicks(0, wMax);
   const pricedRow = rowByDate(sel.date);
@@ -376,11 +383,16 @@ export default function AlbiIndex({ data, instruments }) {
             dot={{ r: 2.5, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
             <LabelList dataKey="code" position="top" offset={8} style={{ fill: '#7dd3fc', fontSize: 9, fontWeight: 600 }} />
           </Line>
+          {corpRows.length > 0 && (
+            <Scatter yAxisId="yield" data={corpRows} dataKey="y" name="Corporate / SOE" fill="#fb7185" shape="diamond" isAnimationActive={false}>
+              <LabelList dataKey="code" position="bottom" offset={8} style={{ fill: '#fda4af', fontSize: 9, fontWeight: 700 }} />
+            </Scatter>
+          )}
         </ComposedChart>
       </ResizableChart>
       <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
-        Bars = index weight at each bond's tenor; line = its yield. Chart shows government bonds only (Eskom/Transnet excluded); metrics are weight‑averaged over the full index (semi‑annual, full reprice; modified duration in years, convexity in years²).
-        {anyProxy && ' Non-government constituents (~2% weight) have no live quote, so their yield is estimated off the govie curve for the metrics (ignores credit spread) — minor effect on the totals.'}
+        Bars = index weight at each bond's tenor; blue line = the government (RSA) yield curve. Rose diamonds = the index's own corporate/SOE constituents (Eskom, Transnet) plotted at their own yield, so the gap above the curve is the credit spread. Metrics are weight‑averaged over the full index (semi‑annual, full reprice; modified duration in years, convexity in years²).
+        {anyProxy && ' Where a corporate has no live quote on a given month, its yield is estimated off the govie curve (shown as “est.”, no visible spread) and that estimate feeds the metrics — minor effect on the totals.'}
       </p>
 
       {series.length > 2 && (
