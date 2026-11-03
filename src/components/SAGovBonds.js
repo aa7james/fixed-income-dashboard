@@ -92,6 +92,16 @@ export default function SAGovBonds({ data, instruments }) {
   const addCorp = () => { if (pickCorp && !addedCorp.includes(pickCorp)) saveCorp([...addedCorp, pickCorp]); setPickCorp(''); };
   const removeCorp = (nm) => saveCorp(addedCorp.filter(n => n !== nm));
 
+  // Manual YTM overrides (per bond, persisted). For illiquid lines the Bloomberg/BVAL
+  // pull can sit well off the last traded level — type your own and it drives every column.
+  const [ytmOvr, setYtmOvr] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('saGovBondsYtm')) || {}; } catch { return {}; }
+  });
+  const saveYtm = (o) => { setYtmOvr(o); try { localStorage.setItem('saGovBondsYtm', JSON.stringify(o)); } catch { /* ignore */ } };
+  const setOneYtm = (name, val) => { const o = { ...ytmOvr }; if (val === '' || val == null) delete o[name]; else o[name] = val; saveYtm(o); };
+  const clearYtm = (name) => { const o = { ...ytmOvr }; delete o[name]; saveYtm(o); };
+  const hasOvr = (name) => { const v = ytmOvr[name]; return v != null && v !== '' && isFinite(Number(v)); };
+
   // the data row on or before the selected as-of date (rows are sorted ascending)
   const latest = useMemo(() => {
     if (!allRows.length) return null;
@@ -139,10 +149,15 @@ export default function SAGovBonds({ data, instruments }) {
     const now = latest.date; // value the maturities are measured from = the as-at date
     const valid = (i) => i.coupon != null && i.maturity_date
       && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40;
-    const mk = (i, isCorp) => ({
-      name: i.name, label: i.display_label || i.name, isCorp, c: Number(i.coupon) * 100, maturity: i.maturity_date,
-      N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365), ytm: Number(latest[i.name]),
-    });
+    const mk = (i, isCorp) => {
+      const pulled = Number(latest[i.name]);
+      const ov = hasOvr(i.name);
+      return {
+        name: i.name, label: i.display_label || i.name, isCorp, c: Number(i.coupon) * 100, maturity: i.maturity_date,
+        N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365),
+        ytm: ov ? Number(ytmOvr[i.name]) : pulled, pulledYtm: pulled, ytmOvr: ov,
+      };
+    };
     const govies = instruments.filter(i => i.category === 'Government Bonds' && valid(i)).map(i => mk(i, false));
     // Yield curve = every govie point (incl. sub-1y) so N-1 can be interpolated.
     const curve = govies.map(g => ({ N: g.N, y: g.ytm })).sort((a, b) => a.N - b.N);
@@ -176,12 +191,12 @@ export default function SAGovBonds({ data, instruments }) {
         }
         return {
           ...g, mod, modH: modDuration(g.ytm, g.N - 1, g.c),
-          yRoll, rollBps: rollDown * 100, couponRet, rollRet, totalRet, excess, beBps,
+          yRoll, rollBps: rollDown * 100, spreadBps: spread * 100, couponRet, rollRet, totalRet, excess, beBps,
           actChange, actTR, actExcess,
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, cashRate, futureRow, addedCorp]);
+  }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasActual = !!futureRow;
 
@@ -194,11 +209,11 @@ export default function SAGovBonds({ data, instruments }) {
         && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
       .map(i => ({
         mat: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365),
-        ytm: Number(latest[i.name]), label: i.display_label || i.name,
+        ytm: hasOvr(i.name) ? Number(ytmOvr[i.name]) : Number(latest[i.name]), label: i.display_label || i.name,
       }))
       .filter(p => p.mat > 0)
       .sort((a, b) => a.mat - b.mat);
-  }, [latest, instruments]);
+  }, [latest, instruments, ytmOvr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Corporate/SOE points as at the selected date (added bonds only).
   const corpCurvePoints = useMemo(() => {
@@ -209,10 +224,10 @@ export default function SAGovBonds({ data, instruments }) {
         && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
       .map(i => ({
         mat: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365),
-        ytm: Number(latest[i.name]), label: i.display_label || i.name,
+        ytm: hasOvr(i.name) ? Number(ytmOvr[i.name]) : Number(latest[i.name]), label: i.display_label || i.name,
       }))
       .filter(p => p.mat > 0).sort((a, b) => a.mat - b.mat);
-  }, [latest, instruments, addedCorp]);
+  }, [latest, instruments, addedCorp, ytmOvr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One combined dataset so the tooltip resolves by whichever point is under the cursor.
   const chartData = useMemo(() => ([
@@ -307,6 +322,7 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Coupon</th>
                 <th style={cell()}>Maturity</th>
                 <th style={cell()}>YTM</th>
+                <th style={cell()}>Spread vs govt</th>
                 <th style={cell()}>Mod. dur.</th>
                 <th style={cell()}>Mod. dur. @ horizon</th>
                 <th style={cell()}>Coupon return</th>
@@ -327,7 +343,23 @@ export default function SAGovBonds({ data, instruments }) {
                   </td>
                   <td style={cell({ color: '#94a3b8' })}>{r.c.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
-                  <td style={cell({ fontWeight: 700 })}>{r.ytm.toFixed(2)}%</td>
+                  <td style={cell()}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                      <input type="number" step="0.01"
+                        value={(r.name in ytmOvr) ? ytmOvr[r.name] : r.pulledYtm.toFixed(2)}
+                        onChange={e => setOneYtm(r.name, e.target.value)}
+                        title={r.ytmOvr ? `Your YTM. Bloomberg/BVAL pull: ${r.pulledYtm.toFixed(2)}%` : 'Type your own last-traded YTM'}
+                        style={{ width: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 13,
+                          padding: '3px 5px', borderRadius: 6, background: r.ytmOvr ? '#3a2d0a' : '#0f172a',
+                          border: `1px solid ${r.ytmOvr ? '#b45309' : '#334155'}`, color: r.ytmOvr ? '#fbbf24' : '#e2e8f0' }} />
+                      <span style={{ color: '#64748b' }}>%</span>
+                      {r.ytmOvr && <button onClick={() => clearYtm(r.name)} title={`Reset to Bloomberg ${r.pulledYtm.toFixed(2)}%`}
+                        style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>↺</button>}
+                    </span>
+                  </td>
+                  <td style={cell({ fontWeight: 600, color: r.isCorp ? (r.spreadBps >= 0 ? '#fb7185' : '#4ade80') : '#475569' })}>
+                    {r.isCorp ? `${r.spreadBps >= 0 ? '+' : ''}${Math.round(r.spreadBps)}` : '—'}
+                  </td>
                   <td style={cell({ color: '#94a3b8' })}>{r.mod.toFixed(1)}</td>
                   <td style={cell({ color: '#64748b' })}>{r.modH.toFixed(1)}</td>
                   <td style={cell()}>{r.couponRet.toFixed(2)}%</td>
@@ -363,7 +395,9 @@ export default function SAGovBonds({ data, instruments }) {
           </p>
         )}
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
-          Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Corporate/SOE bonds you add (shown in rose) roll down that same govie curve <strong>keeping their credit spread constant</strong> — so you see carry + govie roll‑down, not a spread tightening. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
+          <strong style={{ color: '#e2e8f0' }}>Spread vs govt</strong> (bps) = the bond's YTM minus the government curve at the same tenor — its credit spread (≈0 for govies, so shown as “—”).
+          <strong style={{ color: '#fbbf24' }}> YTM is editable</strong>: for an illiquid line the Bloomberg/BVAL pull can sit well off the last trade — type your own and it drives every column (amber = your value; ↺ resets to the pull).
+          {' '}Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Corporate/SOE bonds you add (shown in rose) roll down that same govie curve <strong>keeping their credit spread constant</strong> — so you see carry + govie roll‑down, not a spread tightening. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
         </p>
       </div>
 
