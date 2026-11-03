@@ -184,7 +184,12 @@ export default function SAGovBonds({ data, instruments }) {
         const mod = modDuration(g.ytm, g.N, g.c);
         const price = bondPV(g.ytm, g.N, g.c);      // dirty price today = capital invested
         const priceH = atMat ? 100 : bondPV(yRoll, g.N - H, g.c); // redeems at par, else repriced on unchanged curve
-        const couponRet = (g.c * H / price) * 100;  // coupon income over the holding period / dirty price (%)
+        // Coupon income / dirty price. Held to maturity, count the ACTUAL coupons paid (each c/2),
+        // so the return reconciles to the YTM; the dirty price already carries the imminent/accrued
+        // coupon, which the pull-to-par then amortises. Carry case keeps the simple rate x time.
+        const couponRet = atMat
+          ? (Math.ceil(g.N * 2 - 1e-9) * (g.c / 2) / price) * 100
+          : (g.c * H / price) * 100;
         const rollRet = (priceH / price - 1) * 100; // pull-to-par (and roll-down if sold early) (%)
         const totalRet = couponRet + rollRet;       // bond's return over the holding period, curve unchanged (%)
         const excess = totalRet - cashRet;          // edge over cash held for the same period (%)
