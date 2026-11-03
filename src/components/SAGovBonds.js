@@ -85,6 +85,8 @@ export default function SAGovBonds({ data, instruments }) {
     const v = parseFloat(localStorage.getItem('saGovBondsHorizon')); return (isFinite(v) && v > 0) ? v : 1;
   });
   const setH = (v) => { setHorizon(v); try { localStorage.setItem('saGovBondsHorizon', String(v)); } catch { /* ignore */ } };
+  const [htm, setHtm] = useState(() => localStorage.getItem('saGovBondsHtm') === '1'); // hold each bond to its own maturity
+  const toggleHtm = () => setHtm(v => { const n = !v; try { localStorage.setItem('saGovBondsHtm', n ? '1' : '0'); } catch { /* ignore */ } return n; });
 
   // Corporate/SOE bonds the user has added to the view (one at a time, persisted).
   const [addedCorp, setAddedCorp] = useState(() => {
@@ -170,40 +172,43 @@ export default function SAGovBonds({ data, instruments }) {
     // Corporate/SOE bonds the user added — priced off the SAME govie curve, keeping their spread.
     const corps = instruments.filter(i => addedCorp.includes(i.name) && valid(i)).map(i => mk(i, true));
 
-    const cashRet = cashRate * horizon; // cash return over the whole horizon (roll 1y cash each year)
     return [...govies, ...corps]
-      .filter(g => g.N > horizon + 0.02) // bond must outlast the horizon
+      .filter(g => htm ? g.N > 0.02 : g.N > horizon + 0.02) // in HTM mode keep everything still alive
       .map(g => {
+        const H = htm ? g.N : horizon;              // hold-to-maturity: each bond held to its own maturity
+        const atMat = g.N - H <= 0.08;              // <~1 month left at horizon end => redeems at par (no rate risk)
+        const cashRet = cashRate * H;               // cash rolled over the SAME holding period as the bond
         const spread = g.ytm - interp(curve, g.N);            // credit spread over the govie curve (~0 for govies)
-        const yRoll = interp(curve, g.N - horizon) + spread;  // rolls down the govie curve, keeping its spread
-        const rollDown = g.ytm - yRoll;             // yield given up as it rolls (%-pts)
+        const yRoll = atMat ? null : interp(curve, g.N - H) + spread;  // rolls down the govie curve, keeping its spread
+        const rollDown = atMat ? null : g.ytm - yRoll;        // yield given up as it rolls (%-pts)
         const mod = modDuration(g.ytm, g.N, g.c);
         const price = bondPV(g.ytm, g.N, g.c);      // dirty price today = capital invested
-        const priceH = bondPV(yRoll, g.N - horizon, g.c); // dirty price at horizon, repriced on unchanged curve
-        const couponRet = (g.c * horizon / price) * 100; // coupon income over the horizon / dirty price (%)
-        const rollRet = (priceH / price - 1) * 100; // full reprice: roll-down + pull-to-par (%)
-        const totalRet = couponRet + rollRet;       // bond's return over the horizon, curve unchanged (%)
-        const excess = totalRet - cashRet;          // edge over cash held for the horizon (%)
-        const beBps = breakevenReprice(yRoll, g.N, g.c, couponRet, price, cashRet, horizon); // full reprice (bps)
-        // Realised: what actually happened to the yield over the next ~H years
+        const priceH = atMat ? 100 : bondPV(yRoll, g.N - H, g.c); // redeems at par, else repriced on unchanged curve
+        const couponRet = (g.c * H / price) * 100;  // coupon income over the holding period / dirty price (%)
+        const rollRet = (priceH / price - 1) * 100; // pull-to-par (and roll-down if sold early) (%)
+        const totalRet = couponRet + rollRet;       // bond's return over the holding period, curve unchanged (%)
+        const excess = totalRet - cashRet;          // edge over cash held for the same period (%)
+        // Held to maturity there is no rate risk at all (par is paid regardless) => breakeven n/a.
+        const beBps = atMat ? null : breakevenReprice(yRoll, g.N, g.c, couponRet, price, cashRet, H);
+        // Realised: what actually happened to the yield (only meaningful when sold before maturity)
         let actChange = null, actTR = null, actExcess = null;
-        if (futureRow) {
+        if (futureRow && !atMat) {
           const fv = futureRow[g.name];
           if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) {
             const fY = Number(fv);
             actChange = (fY - g.ytm) * 100;                           // actual yield move (bps)
-            actTR = couponRet + (bondPV(fY, g.N - horizon, g.c) / price - 1) * 100; // realised total return (%)
+            actTR = couponRet + (bondPV(fY, g.N - H, g.c) / price - 1) * 100; // realised total return (%)
             actExcess = actTR - cashRet;                             // realised edge over the benchmark (%)
           }
         }
         return {
-          ...g, mod, modH: modDuration(g.ytm, g.N - horizon, g.c),
-          yRoll, rollBps: rollDown * 100, spreadBps: spread * 100, couponRet, rollRet, totalRet, excess, beBps,
+          ...g, mod, modH: atMat ? 0 : modDuration(g.ytm, g.N - H, g.c), atMat, H, cashRet,
+          yRoll, rollBps: atMat ? null : rollDown * 100, spreadBps: spread * 100, couponRet, rollRet, totalRet, excess, beBps,
           actChange, actTR, actExcess,
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr, horizon]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr, horizon, htm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasActual = !!futureRow;
 
@@ -268,7 +273,9 @@ export default function SAGovBonds({ data, instruments }) {
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>SA Government Bonds — Cash Breakeven</h2>
         <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
-          How far can each bond's yield rise over {hLbl} before you'd have been better off in cash? · as at {latest.dateStr}
+          {htm
+            ? <>Each bond held to its own maturity (redeemed at par) vs cash rolled over the same period · as at {latest.dateStr}</>
+            : <>How far can each bond's yield rise over {hLbl} before you'd have been better off in cash? · as at {latest.dateStr}</>}
         </p>
       </div>
 
@@ -301,22 +308,32 @@ export default function SAGovBonds({ data, instruments }) {
         )}
         <span style={{ fontSize: 13, color: '#cbd5e1' }}>
           {benchLabel} = <strong style={{ color: '#38bdf8' }}>{cashRate != null ? cashRate.toFixed(2) : '—'}%</strong>
-          {horizon !== 1 && cashHz != null && <span style={{ color: '#64748b' }}> · {hLbl} cash ≈ {cashHz.toFixed(2)}%</span>}
+          {!htm && horizon !== 1 && cashHz != null && <span style={{ color: '#64748b' }}> · {hLbl} cash ≈ {cashHz.toFixed(2)}%</span>}
+          {htm && <span style={{ color: '#64748b' }}> · rolled per bond to its maturity</span>}
         </span>
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>Horizon:</span>
-        {[1, 2, 3, 5].map(h => (
-          <button key={h} onClick={() => setH(h)}
-            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: horizon === h ? 700 : 400,
-              border: '1px solid #334155', background: horizon === h ? '#0ea5e9' : '#1e293b', color: horizon === h ? '#fff' : '#94a3b8' }}>{h}y</button>
-        ))}
-        <span style={{ fontSize: 12, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          or
-          <input type="number" step="0.5" min="0.5" value={horizon}
-            onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) setH(v); }}
-            style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }} />years
+        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', opacity: htm ? 0.4 : 1, pointerEvents: htm ? 'none' : 'auto' }}>
+          {[1, 2, 3, 5].map(h => (
+            <button key={h} onClick={() => setH(h)}
+              style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: horizon === h ? 700 : 400,
+                border: '1px solid #334155', background: horizon === h ? '#0ea5e9' : '#1e293b', color: horizon === h ? '#fff' : '#94a3b8' }}>{h}y</button>
+          ))}
+          <span style={{ fontSize: 12, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            or
+            <input type="number" step="0.5" min="0.5" value={horizon}
+              onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) setH(v); }}
+              style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }} />years
+          </span>
+        </span>
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={toggleHtm} title="Hold each bond to its own maturity — redeems at par, no interest-rate risk"
+            style={{ fontSize: 12, fontWeight: htm ? 700 : 500, padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
+              border: `1px solid ${htm ? '#15803d' : '#334155'}`, background: htm ? '#166534' : '#1e293b', color: htm ? '#fff' : '#94a3b8' }}>
+            ⚓ Hold to maturity{htm ? ' · ON' : ''}
+          </button>
         </span>
       </div>
 
@@ -389,11 +406,16 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ color: '#94a3b8' })}>{r.mod.toFixed(1)}</td>
                   <td style={cell({ color: '#64748b' })}>{r.modH.toFixed(1)}</td>
                   <td style={cell()}>{r.couponRet.toFixed(2)}%</td>
-                  <td style={cell({ color: '#94a3b8' })}>{r.yRoll.toFixed(2)}% <span style={{ color: '#475569', fontSize: 11 }}>(−{Math.round(r.rollBps)}bp)</span></td>
+                  <td style={cell({ color: '#94a3b8' })}>{r.atMat
+                    ? <span style={{ color: '#4ade80' }}>matures · par</span>
+                    : <>{r.yRoll.toFixed(2)}% <span style={{ color: '#475569', fontSize: 11 }}>(−{Math.round(r.rollBps)}bp)</span></>}</td>
                   <td style={cell({ color: r.rollRet >= 0 ? '#2dd4bf' : '#f87171' })}>{r.rollRet >= 0 ? '+' : ''}{r.rollRet.toFixed(2)}%</td>
                   <td style={cell({ fontWeight: 700 })}>{r.totalRet.toFixed(2)}%</td>
                   <td style={cell({ color: r.excess >= 0 ? '#4ade80' : '#f87171' })}>{r.excess >= 0 ? '+' : ''}{r.excess.toFixed(2)}%</td>
-                  <td style={cell({ fontWeight: 700, color: r.beBps >= 20 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>{r.beBps >= 0 ? '+' : ''}{Math.round(r.beBps)}</td>
+                  <td style={cell({ fontWeight: 700, color: r.beBps == null ? '#4ade80' : r.beBps >= 20 ? '#4ade80' : r.beBps >= 0 ? '#fbbf24' : '#f87171' })}>
+                    {r.beBps == null
+                      ? <span title="Held to maturity, par is paid regardless of yields — no interest-rate risk, only default risk.">no rate risk</span>
+                      : `${r.beBps >= 0 ? '+' : ''}${Math.round(r.beBps)}`}</td>
                   {hasActual && (
                     <td style={cell({ fontWeight: 600, borderLeft: '2px solid #334155', color: r.actChange == null ? '#475569' : r.actChange > 0 ? '#f87171' : '#4ade80' })}>
                       {r.actChange == null ? '—' : `${r.actChange > 0 ? '+' : ''}${Math.round(r.actChange)}`}
@@ -409,6 +431,11 @@ export default function SAGovBonds({ data, instruments }) {
             </tbody>
           </table>
         </div>
+        {htm && (
+          <p style={{ fontSize: 12, color: '#bbf7d0', margin: '12px 2px 0', lineHeight: 1.5, background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '8px 12px' }}>
+            <strong style={{ color: '#4ade80' }}>⚓ Hold-to-maturity mode is ON.</strong> Each bond is held to its own maturity and redeemed at <strong>par</strong>, so <strong>there is no interest-rate risk</strong> — yields can do whatever they like and you still collect par plus coupons. The only risk left is default. “Rolls to” shows <em>matures · par</em>, “Breakeven” shows <em>no rate risk</em>, and <strong>Total return ≈ the bond's YTM</strong> over its life. <strong>Excess vs cash</strong> is your locked pickup over rolling the benchmark for the same period. Turn the button off to go back to a fixed selling horizon.
+          </p>
+        )}
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
           <strong style={{ color: '#e2e8f0' }}>Total return</strong> (over your <strong>{hLbl}</strong> horizon) = <strong>Coupon return</strong> (coupon × {horizon} ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — reprice the bond {hLbl} on (now N−{horizon} years) at the <strong>Rolls to</strong> yield (the curve's (N−{horizon})‑year point) vs its price today: captures both the yield roll‑down and the pull‑to‑par.
           <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − cash held for {hLbl} ({benchLabel} rolled, ≈{cashHz?.toFixed(2)}%): the price fall the bond can absorb before it loses.
