@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts';
+import { ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { fmtTenor, tenorTicks } from './axisFormat';
 
@@ -11,10 +11,16 @@ const CurveTooltip = ({ active, payload }) => {
   const p = payload[0].payload;
   return (
     <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#e2e8f0' }}>
-      <strong>{p.label}</strong><br />
-      {p.mat.toFixed(1)}y · <strong style={{ color: '#38bdf8' }}>{p.ytm.toFixed(2)}%</strong>
+      <strong>{p.label}</strong>{p.isCorp && <span style={{ color: '#fb7185' }}> · corporate</span>}<br />
+      {p.mat.toFixed(1)}y · <strong style={{ color: p.isCorp ? '#fb7185' : '#38bdf8' }}>{p.ytm.toFixed(2)}%</strong>
     </div>
   );
+};
+
+// Point label that skips null rows (combined govie + corporate dataset).
+const PointLabel = ({ x, y, value, fill, dy }) => {
+  if (x == null || y == null || Number.isNaN(+y) || value == null) return null;
+  return <text x={x} y={+y + dy} textAnchor="middle" fill={fill} fontSize={10} fontWeight={600}>{value}</text>;
 };
 
 // Dirty price per 100 face, semi-annual. y, c in %; n = years to maturity (fractional ok).
@@ -74,6 +80,18 @@ export default function SAGovBonds({ data, instruments }) {
   const maxISO = allRows.length ? iso(allRows[allRows.length - 1].date) : '';
   const [asOf, setAsOf] = useState(maxISO);
 
+  // Corporate/SOE bonds the user has added to the view (one at a time, persisted).
+  const [addedCorp, setAddedCorp] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('saGovBondsCorp')) || []; } catch { return []; }
+  });
+  const [pickCorp, setPickCorp] = useState('');
+  const saveCorp = (arr) => { setAddedCorp(arr); try { localStorage.setItem('saGovBondsCorp', JSON.stringify(arr)); } catch { /* ignore */ } };
+  const corpOptions = useMemo(() => (instruments || [])
+    .filter(i => i.category === 'SOE / Corporate Bonds' && i.coupon != null && i.maturity_date)
+    .map(i => i.name).sort(), [instruments]);
+  const addCorp = () => { if (pickCorp && !addedCorp.includes(pickCorp)) saveCorp([...addedCorp, pickCorp]); setPickCorp(''); };
+  const removeCorp = (nm) => saveCorp(addedCorp.filter(n => n !== nm));
+
   // the data row on or before the selected as-of date (rows are sorted ascending)
   const latest = useMemo(() => {
     if (!allRows.length) return null;
@@ -119,20 +137,23 @@ export default function SAGovBonds({ data, instruments }) {
   const rows = useMemo(() => {
     if (!latest || !instruments?.length || cashRate == null) return [];
     const now = latest.date; // value the maturities are measured from = the as-at date
-    const govies = instruments
-      .filter(i => i.category === 'Government Bonds' && i.coupon != null && i.maturity_date
-        && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
-      .map(i => ({
-        name: i.name, label: i.display_label || i.name, c: Number(i.coupon) * 100, maturity: i.maturity_date,
-        N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365), ytm: Number(latest[i.name]),
-      }));
+    const valid = (i) => i.coupon != null && i.maturity_date
+      && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40;
+    const mk = (i, isCorp) => ({
+      name: i.name, label: i.display_label || i.name, isCorp, c: Number(i.coupon) * 100, maturity: i.maturity_date,
+      N: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365), ytm: Number(latest[i.name]),
+    });
+    const govies = instruments.filter(i => i.category === 'Government Bonds' && valid(i)).map(i => mk(i, false));
     // Yield curve = every govie point (incl. sub-1y) so N-1 can be interpolated.
     const curve = govies.map(g => ({ N: g.N, y: g.ytm })).sort((a, b) => a.N - b.N);
+    // Corporate/SOE bonds the user added — priced off the SAME govie curve, keeping their spread.
+    const corps = instruments.filter(i => addedCorp.includes(i.name) && valid(i)).map(i => mk(i, true));
 
-    return govies
+    return [...govies, ...corps]
       .filter(g => g.N > 1.02) // need a 1y horizon left
       .map(g => {
-        const yRoll = interp(curve, g.N - 1);       // where it rolls to on an unchanged curve
+        const spread = g.ytm - interp(curve, g.N);        // credit spread over the govie curve (~0 for govies)
+        const yRoll = interp(curve, g.N - 1) + spread;    // rolls down the govie curve, keeping its spread
         const rollDown = g.ytm - yRoll;             // yield given up as it rolls (%-pts)
         const mod = modDuration(g.ytm, g.N, g.c);
         const price = bondPV(g.ytm, g.N, g.c);      // dirty price today = capital invested
@@ -160,7 +181,7 @@ export default function SAGovBonds({ data, instruments }) {
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, cashRate, futureRow]);
+  }, [latest, instruments, cashRate, futureRow, addedCorp]);
 
   const hasActual = !!futureRow;
 
@@ -179,10 +200,32 @@ export default function SAGovBonds({ data, instruments }) {
       .sort((a, b) => a.mat - b.mat);
   }, [latest, instruments]);
 
+  // Corporate/SOE points as at the selected date (added bonds only).
+  const corpCurvePoints = useMemo(() => {
+    if (!latest || !instruments?.length) return [];
+    const now = latest.date;
+    return instruments
+      .filter(i => addedCorp.includes(i.name) && i.maturity_date
+        && latest[i.name] != null && Number(latest[i.name]) > 0.5 && Number(latest[i.name]) < 40)
+      .map(i => ({
+        mat: (new Date(i.maturity_date) - now) / (1000 * 3600 * 24 * 365),
+        ytm: Number(latest[i.name]), label: i.display_label || i.name,
+      }))
+      .filter(p => p.mat > 0).sort((a, b) => a.mat - b.mat);
+  }, [latest, instruments, addedCorp]);
+
+  // One combined dataset so the tooltip resolves by whichever point is under the cursor.
+  const chartData = useMemo(() => ([
+    ...curvePoints.map(p => ({ mat: p.mat, label: p.label, ytm: p.ytm, yGov: p.ytm })),
+    ...corpCurvePoints.map(p => ({ mat: p.mat, label: p.label, ytm: p.ytm, yCorp: p.ytm, isCorp: true })),
+  ].sort((a, b) => a.mat - b.mat)), [curvePoints, corpCurvePoints]);
+
   // Clean y-axis: domain rounded out to 0.25% with evenly-spaced ticks (0.10% when narrow).
   const curveY = useMemo(() => {
     if (!curvePoints.length) return { domain: ['auto', 'auto'], ticks: undefined };
-    const ys = curvePoints.map(p => p.ytm).concat(cashRate != null && cashRate > 0 ? [cashRate] : []);
+    const ys = curvePoints.map(p => p.ytm)
+      .concat(corpCurvePoints.map(p => p.ytm))
+      .concat(cashRate != null && cashRate > 0 ? [cashRate] : []);
     const lo = Math.floor((Math.min(...ys) - 0.1) * 4) / 4;
     const hi = Math.ceil((Math.max(...ys) + 0.1) * 4) / 4;
     const range = hi - lo;
@@ -191,7 +234,7 @@ export default function SAGovBonds({ data, instruments }) {
     const ticks = [];
     for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(2));
     return { domain: [lo, hi], ticks };
-  }, [curvePoints, cashRate]);
+  }, [curvePoints, corpCurvePoints, cashRate]);
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
@@ -236,6 +279,25 @@ export default function SAGovBonds({ data, instruments }) {
         </span>
       </div>
 
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Add corporate bond:</span>
+        <select value={pickCorp} onChange={e => setPickCorp(e.target.value)}
+          style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', minWidth: 170 }}>
+          <option value="">— select —</option>
+          {corpOptions.filter(n => !addedCorp.includes(n)).map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <button onClick={addCorp} disabled={!pickCorp}
+          style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: pickCorp ? 'pointer' : 'default',
+            border: 'none', background: pickCorp ? '#0ea5e9' : '#334155', color: '#fff', opacity: pickCorp ? 1 : 0.6 }}>+ Add</button>
+        {addedCorp.map(nm => (
+          <span key={nm} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, background: '#3f1d2e', border: '1px solid #7f1d1d', color: '#fda4af' }}>
+            {nm}
+            <button onClick={() => removeCorp(nm)} title="Remove" style={{ background: 'none', border: 'none', color: '#fb7185', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+          </span>
+        ))}
+        {corpOptions.length === 0 && <span style={{ fontSize: 11, color: '#64748b' }}>No corporate bonds loaded — add them in the Instruments tab first.</span>}
+      </div>
+
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
@@ -260,7 +322,9 @@ export default function SAGovBonds({ data, instruments }) {
             <tbody>
               {rows.map(r => (
                 <tr key={r.label} style={{ borderTop: '1px solid #0f172a' }}>
-                  <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>{r.label}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: r.isCorp ? '#fb7185' : undefined }}>
+                    {r.label}{r.isCorp && <span style={{ color: '#fda4af', fontSize: 11, fontWeight: 400 }}> · corp</span>}
+                  </td>
                   <td style={cell({ color: '#94a3b8' })}>{r.c.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
                   <td style={cell({ fontWeight: 700 })}>{r.ytm.toFixed(2)}%</td>
@@ -299,7 +363,7 @@ export default function SAGovBonds({ data, instruments }) {
           </p>
         )}
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
-          Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
+          Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Corporate/SOE bonds you add (shown in rose) roll down that same govie curve <strong>keeping their credit spread constant</strong> — so you see carry + govie roll‑down, not a spread tightening. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
         </p>
       </div>
 
@@ -318,10 +382,10 @@ export default function SAGovBonds({ data, instruments }) {
         {showCurve && (
           <div style={{ marginTop: 12 }}>
             <ResizableChart height={320}>
-              <LineChart data={curvePoints} margin={{ top: 10, right: 24, bottom: 24, left: 8 }}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 24, bottom: 24, left: 8 }}>
                 <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
                 <XAxis type="number" dataKey="mat" domain={[0, 'dataMax']} tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  ticks={tenorTicks(curvePoints.length ? Math.max(...curvePoints.map(p => p.mat)) : 30)}
+                  ticks={tenorTicks(chartData.length ? Math.max(...chartData.map(p => p.mat)) : 30)}
                   tickFormatter={fmtTenor} stroke="#475569"
                   label={{ value: 'Years to maturity', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 12 }} />
                 <YAxis domain={curveY.domain} ticks={curveY.ticks} interval={0} allowDecimals tick={{ fill: '#94a3b8', fontSize: 11 }}
@@ -331,14 +395,19 @@ export default function SAGovBonds({ data, instruments }) {
                   <ReferenceLine y={cashRate} stroke="#f59e0b" strokeDasharray="5 4"
                     label={{ value: `${benchLabel} ${cashRate.toFixed(2)}%`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }} />
                 )}
-                <Line type="monotone" dataKey="ytm" stroke="#38bdf8" strokeWidth={2}
+                <Line type="monotone" dataKey="yGov" stroke="#38bdf8" strokeWidth={2} connectNulls
                   dot={{ r: 3, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
-                  <LabelList dataKey="label" position="top" offset={8} style={{ fill: '#7dd3fc', fontSize: 10, fontWeight: 600 }} />
+                  <LabelList dataKey="label" content={(p) => <PointLabel {...p} fill="#7dd3fc" dy={-10} />} />
                 </Line>
-              </LineChart>
+                {corpCurvePoints.length > 0 && (
+                  <Scatter dataKey="yCorp" fill="#fb7185" shape="diamond" isAnimationActive={false}>
+                    <LabelList dataKey="label" content={(p) => <PointLabel {...p} fill="#fda4af" dy={16} />} />
+                  </Scatter>
+                )}
+              </ComposedChart>
             </ResizableChart>
             <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0' }}>
-              Nominal govie YTMs by years to maturity, as at {latest.dateStr}.{cashRate > 0 ? ` Dashed line = ${benchLabel} (${cashRate?.toFixed(2)}%).` : ''} Drag the bottom‑right corner to resize.
+              Nominal govie YTMs by years to maturity (blue line), as at {latest.dateStr}.{corpCurvePoints.length > 0 ? ' Rose diamonds = corporate/SOE bonds you added — the gap above the line is their credit spread.' : ''}{cashRate > 0 ? ` Dashed line = ${benchLabel} (${cashRate?.toFixed(2)}%).` : ''} Drag the bottom‑right corner to resize.
             </p>
           </div>
         )}
