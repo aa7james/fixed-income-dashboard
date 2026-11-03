@@ -60,10 +60,10 @@ function modDuration(y0, N, c) {
 }
 
 // Breakeven yield rise (bps) by full reprice: the extra move dy (on the roll-to yield,
-// realised at the horizon) at which the bond's 1y total return equals the cash return.
-function breakevenReprice(yRoll, N, c, couponRet, P0, cashRate) {
-  const tr = (dy) => couponRet + (bondPV(yRoll + dy, N - 1, c) / P0 - 1) * 100; // total return (%)
-  const f = (dy) => tr(dy) - cashRate; // decreasing in dy
+// realised at the horizon H years) at which the bond's total return equals the cash return.
+function breakevenReprice(yRoll, N, c, couponRet, P0, cashTarget, H) {
+  const tr = (dy) => couponRet + (bondPV(yRoll + dy, N - H, c) / P0 - 1) * 100; // total return (%)
+  const f = (dy) => tr(dy) - cashTarget; // decreasing in dy
   let lo = -5, hi = 8; // yield move in %-pts
   if (f(lo) <= 0) return lo * 100;
   if (f(hi) >= 0) return hi * 100;
@@ -79,6 +79,12 @@ export default function SAGovBonds({ data, instruments }) {
   const minISO = allRows.length ? iso(allRows[0].date) : '';
   const maxISO = allRows.length ? iso(allRows[allRows.length - 1].date) : '';
   const [asOf, setAsOf] = useState(maxISO);
+
+  // Investment horizon in years (how long you hold before comparing to cash).
+  const [horizon, setHorizon] = useState(() => {
+    const v = parseFloat(localStorage.getItem('saGovBondsHorizon')); return (isFinite(v) && v > 0) ? v : 1;
+  });
+  const setH = (v) => { setHorizon(v); try { localStorage.setItem('saGovBondsHorizon', String(v)); } catch { /* ignore */ } };
 
   // Corporate/SOE bonds the user has added to the view (one at a time, persisted).
   const [addedCorp, setAddedCorp] = useState(() => {
@@ -129,10 +135,10 @@ export default function SAGovBonds({ data, instruments }) {
   const benchLabel = bench === 'NCD' ? '1y NCD' : bench === 'T-Bill' ? '1y T-Bill'
     : bench === 'Call' ? 'Call' : '0% (breakeven)';
 
-  // The data row ~1 year after the as-at date (for realised / "what actually happened" columns).
+  // The data row ~H years after the as-at date (for realised / "what actually happened" columns).
   const futureRow = useMemo(() => {
     if (!latest || !allRows.length) return null;
-    const target = new Date(latest.date); target.setFullYear(target.getFullYear() + 1);
+    const target = new Date(latest.date.getTime() + horizon * 365 * 24 * 3600 * 1000);
     let best = null, bestDiff = Infinity;
     for (const r of allRows) {
       if (r.date <= latest.date) continue;
@@ -141,8 +147,8 @@ export default function SAGovBonds({ data, instruments }) {
     }
     if (!best) return null;
     const yrsAfter = (best.date - latest.date) / (1000 * 3600 * 24 * 365);
-    return (yrsAfter >= 0.75 && yrsAfter <= 1.5) ? best : null; // need ~1y of forward data
-  }, [latest, allRows]);
+    return (yrsAfter >= 0.75 * horizon && yrsAfter <= 1.5 * horizon) ? best : null; // need ~H of forward data
+  }, [latest, allRows, horizon]);
 
   const rows = useMemo(() => {
     if (!latest || !instruments?.length || cashRate == null) return [];
@@ -164,39 +170,40 @@ export default function SAGovBonds({ data, instruments }) {
     // Corporate/SOE bonds the user added — priced off the SAME govie curve, keeping their spread.
     const corps = instruments.filter(i => addedCorp.includes(i.name) && valid(i)).map(i => mk(i, true));
 
+    const cashRet = cashRate * horizon; // cash return over the whole horizon (roll 1y cash each year)
     return [...govies, ...corps]
-      .filter(g => g.N > 1.02) // need a 1y horizon left
+      .filter(g => g.N > horizon + 0.02) // bond must outlast the horizon
       .map(g => {
-        const spread = g.ytm - interp(curve, g.N);        // credit spread over the govie curve (~0 for govies)
-        const yRoll = interp(curve, g.N - 1) + spread;    // rolls down the govie curve, keeping its spread
+        const spread = g.ytm - interp(curve, g.N);            // credit spread over the govie curve (~0 for govies)
+        const yRoll = interp(curve, g.N - horizon) + spread;  // rolls down the govie curve, keeping its spread
         const rollDown = g.ytm - yRoll;             // yield given up as it rolls (%-pts)
         const mod = modDuration(g.ytm, g.N, g.c);
         const price = bondPV(g.ytm, g.N, g.c);      // dirty price today = capital invested
-        const priceH = bondPV(yRoll, g.N - 1, g.c); // dirty price in 1y, repriced on unchanged curve
-        const couponRet = (g.c / price) * 100;      // coupon income / dirty price (%)
+        const priceH = bondPV(yRoll, g.N - horizon, g.c); // dirty price at horizon, repriced on unchanged curve
+        const couponRet = (g.c * horizon / price) * 100; // coupon income over the horizon / dirty price (%)
         const rollRet = (priceH / price - 1) * 100; // full reprice: roll-down + pull-to-par (%)
-        const totalRet = couponRet + rollRet;       // bond's 1y return, curve unchanged (%)
-        const excess = totalRet - cashRate;         // edge over 1y cash (%)
-        const beBps = breakevenReprice(yRoll, g.N, g.c, couponRet, price, cashRate); // full reprice (bps)
-        // Realised: what actually happened to the yield over the next ~year
+        const totalRet = couponRet + rollRet;       // bond's return over the horizon, curve unchanged (%)
+        const excess = totalRet - cashRet;          // edge over cash held for the horizon (%)
+        const beBps = breakevenReprice(yRoll, g.N, g.c, couponRet, price, cashRet, horizon); // full reprice (bps)
+        // Realised: what actually happened to the yield over the next ~H years
         let actChange = null, actTR = null, actExcess = null;
         if (futureRow) {
           const fv = futureRow[g.name];
           if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) {
             const fY = Number(fv);
             actChange = (fY - g.ytm) * 100;                           // actual yield move (bps)
-            actTR = couponRet + (bondPV(fY, g.N - 1, g.c) / price - 1) * 100; // realised total return (%)
-            actExcess = actTR - cashRate;                            // realised edge over the benchmark (%)
+            actTR = couponRet + (bondPV(fY, g.N - horizon, g.c) / price - 1) * 100; // realised total return (%)
+            actExcess = actTR - cashRet;                             // realised edge over the benchmark (%)
           }
         }
         return {
-          ...g, mod, modH: modDuration(g.ytm, g.N - 1, g.c),
+          ...g, mod, modH: modDuration(g.ytm, g.N - horizon, g.c),
           yRoll, rollBps: rollDown * 100, spreadBps: spread * 100, couponRet, rollRet, totalRet, excess, beBps,
           actChange, actTR, actExcess,
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr, horizon]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasActual = !!futureRow;
 
@@ -253,12 +260,15 @@ export default function SAGovBonds({ data, instruments }) {
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
+  const hLbl = `${horizon} year${horizon === 1 ? '' : 's'}`;
+  const cashHz = cashRate != null ? cashRate * horizon : null; // cash return over the horizon
+
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>SA Government Bonds — Cash Breakeven</h2>
         <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
-          How far can each bond's yield rise over 1 year before you'd have been better off in 1‑year cash? · as at {latest.dateStr}
+          How far can each bond's yield rise over {hLbl} before you'd have been better off in cash? · as at {latest.dateStr}
         </p>
       </div>
 
@@ -291,6 +301,22 @@ export default function SAGovBonds({ data, instruments }) {
         )}
         <span style={{ fontSize: 13, color: '#cbd5e1' }}>
           {benchLabel} = <strong style={{ color: '#38bdf8' }}>{cashRate != null ? cashRate.toFixed(2) : '—'}%</strong>
+          {horizon !== 1 && cashHz != null && <span style={{ color: '#64748b' }}> · {hLbl} cash ≈ {cashHz.toFixed(2)}%</span>}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Horizon:</span>
+        {[1, 2, 3, 5].map(h => (
+          <button key={h} onClick={() => setH(h)}
+            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: horizon === h ? 700 : 400,
+              border: '1px solid #334155', background: horizon === h ? '#0ea5e9' : '#1e293b', color: horizon === h ? '#fff' : '#94a3b8' }}>{h}y</button>
+        ))}
+        <span style={{ fontSize: 12, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          or
+          <input type="number" step="0.5" min="0.5" value={horizon}
+            onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) setH(v); }}
+            style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }} />years
         </span>
       </div>
 
@@ -331,7 +357,7 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Total return</th>
                 <th style={cell()}>Excess vs cash</th>
                 <th style={cell()}>Breakeven</th>
-                {hasActual && <th style={cell({ color: '#f1f5f9', borderLeft: '2px solid #334155' })}>Actual Δyield (1y)</th>}
+                {hasActual && <th style={cell({ color: '#f1f5f9', borderLeft: '2px solid #334155' })}>Actual Δyield ({hLbl})</th>}
                 {hasActual && <th style={cell({ color: '#f1f5f9' })}>Actual excess</th>}
               </tr>
             </thead>
@@ -384,20 +410,20 @@ export default function SAGovBonds({ data, instruments }) {
           </table>
         </div>
         <p style={{ fontSize: 12, color: '#cbd5e1', margin: '12px 2px 0', lineHeight: 1.5 }}>
-          <strong style={{ color: '#e2e8f0' }}>Total return</strong> = <strong>Coupon return</strong> (coupon ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — reprice the bond 1 year on (now N−1 years) at the <strong>Rolls to</strong> yield (the curve's (N−1)‑year point) vs its price today: captures both the yield roll‑down and the pull‑to‑par.
-          <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − {benchLabel} ({cashRate?.toFixed(2)}%): the price fall the bond can absorb before it loses.
-          <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = the extra yield rise (full reprice at the horizon) at which the bond's total return drops to the {benchLabel}. Bigger = more cushion; negative = already behind cash.
+          <strong style={{ color: '#e2e8f0' }}>Total return</strong> (over your <strong>{hLbl}</strong> horizon) = <strong>Coupon return</strong> (coupon × {horizon} ÷ dirty price) + <strong style={{ color: '#2dd4bf' }}>Roll‑down return</strong> — reprice the bond {hLbl} on (now N−{horizon} years) at the <strong>Rolls to</strong> yield (the curve's (N−{horizon})‑year point) vs its price today: captures both the yield roll‑down and the pull‑to‑par.
+          <strong style={{ color: '#4ade80' }}> Excess vs cash</strong> = total return − cash held for {hLbl} ({benchLabel} rolled, ≈{cashHz?.toFixed(2)}%): the price fall the bond can absorb before it loses.
+          <strong style={{ color: '#fbbf24' }}> Breakeven</strong> (bps) = the extra yield rise (full reprice at the horizon) at which the bond's total return drops to the {hLbl} cash return. Bigger = more cushion; negative = already behind cash.
         </p>
         {hasActual && (
           <p style={{ fontSize: 12, color: '#cbd5e1', margin: '8px 2px 0', lineHeight: 1.5 }}>
-            <strong style={{ color: '#f1f5f9' }}>Actual Δyield (1y)</strong> = what the bond's yield actually did over the following year (as at {futureRow.dateStr}); red = rose, green = fell.
-            <strong style={{ color: '#f1f5f9' }}> Actual excess</strong> = the bond's realised total return over that year (repriced at the yield that actually occurred) minus the {benchLabel} you'd have locked in ({cashRate?.toFixed(2)}%). This is what would really have happened.
+            <strong style={{ color: '#f1f5f9' }}>Actual Δyield ({hLbl})</strong> = what the bond's yield actually did over the following {hLbl} (as at {futureRow.dateStr}); red = rose, green = fell.
+            <strong style={{ color: '#f1f5f9' }}> Actual excess</strong> = the bond's realised total return over that period (repriced at the yield that actually occurred) minus the cash you'd have earned (≈{cashHz?.toFixed(2)}%). This is what would really have happened.
           </p>
         )}
         <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0', lineHeight: 1.4 }}>
           <strong style={{ color: '#e2e8f0' }}>Spread vs govt</strong> (bps) = the bond's YTM minus the government curve at the same tenor — its credit spread (≈0 for govies, so shown as “—”).
           <strong style={{ color: '#fbbf24' }}> YTM is editable</strong>: for an illiquid line the Bloomberg/BVAL pull can sit well off the last trade — type your own and it drives every column (amber = your value; ↺ resets to the pull).
-          {' '}Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Corporate/SOE bonds you add (shown in rose) roll down that same govie curve <strong>keeping their credit spread constant</strong> — so you see carry + govie roll‑down, not a spread tightening. Modified‑duration columns (today and at horizon) shown for reference. ACT/365, bonds maturing within a year excluded.
+          {' '}Carry + roll model (no coupon reinvestment). Roll‑down and breakeven are both full semi‑annual reprices (no duration shortcut); roll‑to yield interpolated from the govie curve. Corporate/SOE bonds you add (shown in rose) roll down that same govie curve <strong>keeping their credit spread constant</strong> — so you see carry + govie roll‑down, not a spread tightening. Modified‑duration columns (today and at horizon) shown for reference. Cash held for the horizon = the benchmark rolled each year at the same rate. ACT/365, bonds maturing within the horizon excluded.
         </p>
       </div>
 
