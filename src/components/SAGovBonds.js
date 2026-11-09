@@ -393,13 +393,14 @@ export default function SAGovBonds({ data, instruments }) {
                   <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
                   <td style={cell()}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-                      <input type="number" step="0.01"
+                      <input type="text" inputMode="decimal"
                         value={(r.name in ytmOvr) ? ytmOvr[r.name] : r.pulledYtm.toFixed(2)}
-                        onChange={e => setOneYtm(r.name, e.target.value)}
-                        title={r.ytmOvr ? `Your YTM. Bloomberg/BVAL pull: ${r.pulledYtm.toFixed(2)}%` : 'Type your own last-traded YTM'}
-                        style={{ width: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 13,
-                          padding: '3px 5px', borderRadius: 6, background: r.ytmOvr ? '#3a2d0a' : '#0f172a',
-                          border: `1px solid ${r.ytmOvr ? '#b45309' : '#334155'}`, color: r.ytmOvr ? '#fbbf24' : '#e2e8f0' }} />
+                        onChange={e => { const v = e.target.value; if (v === '' || /^[0-9]*\.?[0-9]*$/.test(v)) setOneYtm(r.name, v); }}
+                        onFocus={e => e.target.select()}
+                        title={r.ytmOvr ? `Your YTM — click and type to change it. Bloomberg/BVAL pull: ${r.pulledYtm.toFixed(2)}%` : 'Click and type your own YTM — it drives every column'}
+                        style={{ width: 64, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 13, cursor: 'text',
+                          padding: '3px 6px', borderRadius: 6, background: r.ytmOvr ? '#3a2d0a' : '#0f172a',
+                          border: `1px solid ${r.ytmOvr ? '#b45309' : '#475569'}`, color: r.ytmOvr ? '#fbbf24' : '#e2e8f0' }} />
                       <span style={{ color: '#64748b' }}>%</span>
                       {r.ytmOvr && <button onClick={() => clearYtm(r.name)} title={`Reset to Bloomberg ${r.pulledYtm.toFixed(2)}%`}
                         style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>↺</button>}
