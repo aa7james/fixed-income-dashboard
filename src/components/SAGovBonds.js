@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts';
+import { ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList, Legend } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { fmtTenor, tenorTicks } from './axisFormat';
 
@@ -71,6 +71,44 @@ function breakevenReprice(yRoll, N, c, couponRet, P0, cashTarget, H) {
   return ((lo + hi) / 2) * 100;
 }
 
+// Government yield curve ({N, y}) as at a given row's date, measured from `now`.
+const YR_MS = 365 * 24 * 3600 * 1000;
+function curveAt(instruments, row, now) {
+  const pts = [];
+  for (const i of instruments) {
+    if (i.category !== 'Government Bonds' || i.coupon == null || !i.maturity_date) continue;
+    const v = row[i.name];
+    if (v == null || !(Number(v) > 0.5 && Number(v) < 40)) continue;
+    const N = (new Date(i.maturity_date) - now) / YR_MS;
+    if (N > 0) pts.push({ N, y: Number(v) });
+  }
+  pts.sort((a, b) => a.N - b.N);
+  return pts;
+}
+
+const BeHistTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const d = new Date(label);
+  const val = (k) => { const p = payload.find(x => x.dataKey === k); return p && p.value != null ? p.value : null; };
+  const be = val('breakeven'), ac = val('actChange'), ex = val('actExcess');
+  const row = (c, t, v) => v == null ? null : (
+    <div style={{ color: c }}>{t}: <strong>{v}</strong></div>
+  );
+  return (
+    <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#e2e8f0' }}>
+      <strong>{d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+      {row('#fbbf24', 'Breakeven cushion', be == null ? null : `${be >= 0 ? '+' : ''}${Math.round(be)} bp`)}
+      {row('#38bdf8', 'Actual Δyield (next period)', ac == null ? null : `${ac >= 0 ? '+' : ''}${Math.round(ac)} bp`)}
+      {row('#4ade80', 'Actual excess vs cash', ex == null ? null : `${ex >= 0 ? '+' : ''}${ex.toFixed(2)}%`)}
+      {be != null && ac != null && (
+        <div style={{ color: '#94a3b8', marginTop: 3, fontSize: 11 }}>
+          {ac <= be ? 'yield rose less than the cushion → beat cash' : 'yield rose more than the cushion → behind cash'}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function SAGovBonds({ data, instruments }) {
   const [bench, setBench] = useState('NCD'); // 'NCD' | 'T-Bill' | 'Call' | 'Zero'
   const [callRate, setCallRate] = useState('7.10'); // editable call-account rate (%)
@@ -109,6 +147,10 @@ export default function SAGovBonds({ data, instruments }) {
   const setOneYtm = (name, val) => { const o = { ...ytmOvr }; if (val === '' || val == null) delete o[name]; else o[name] = val; saveYtm(o); };
   const clearYtm = (name) => { const o = { ...ytmOvr }; delete o[name]; saveYtm(o); };
   const hasOvr = (name) => { const v = ytmOvr[name]; return v != null && v !== '' && isFinite(Number(v)); };
+
+  // Breakeven-history chart: which bond, and whether the (compute-heavy) section is open.
+  const [showBeChart, setShowBeChart] = useState(false);
+  const [beChartBond, setBeChartBond] = useState('');
 
   // the data row on or before the selected as-of date (rows are sorted ascending)
   const latest = useMemo(() => {
@@ -216,6 +258,94 @@ export default function SAGovBonds({ data, instruments }) {
   }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr, horizon, htm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasActual = !!futureRow;
+
+  // ---- Breakeven history: run the table's breakeven math on every day we have ----
+  // Bonds you can chart (long enough to hold the horizon), nearest maturity first.
+  const beBondOptions = useMemo(() => {
+    if (!instruments?.length || !latest) return [];
+    const now = latest.date;
+    return instruments
+      .filter(i => (i.category === 'Government Bonds' || addedCorp.includes(i.name)) && i.coupon != null && i.maturity_date)
+      .map(i => ({ name: i.name, label: i.display_label || i.name, isCorp: addedCorp.includes(i.name),
+        N: (new Date(i.maturity_date) - now) / YR_MS }))
+      .filter(o => o.N > horizon + 0.5)
+      .sort((a, b) => a.N - b.N);
+  }, [instruments, latest, addedCorp, horizon]);
+
+  const defaultBeBond = useMemo(() => {
+    if (!beBondOptions.length) return '';
+    const r2032 = beBondOptions.find(o => /r2032/i.test(o.name) || /r2032/i.test(o.label));
+    return (r2032 || beBondOptions.find(o => o.N >= 5) || beBondOptions[0]).name;
+  }, [beBondOptions]);
+
+  const effectiveBeBond = (beChartBond && beBondOptions.some(o => o.name === beChartBond)) ? beChartBond : defaultBeBond;
+  const beBondLabel = (beBondOptions.find(o => o.name === effectiveBeBond) || {}).label || effectiveBeBond;
+
+  const beHistory = useMemo(() => {
+    if (!showBeChart || !effectiveBeBond || !instruments?.length || !allRows.length || cashRate == null) return [];
+    const inst = instruments.find(i => i.name === effectiveBeBond);
+    if (!inst || inst.coupon == null || !inst.maturity_date) return [];
+    const c = Number(inst.coupon) * 100;
+    const mat = new Date(inst.maturity_date);
+    const H = horizon;
+    const benchVal = (r) => {
+      if (bench === 'Zero') return 0;
+      if (bench === 'Call') { const n = parseFloat(callRate); return isNaN(n) ? null : n; }
+      const v = bench === 'NCD' ? r['12m Fixed Rate NCD'] : r['12m T-Bill'];
+      return v == null ? null : Number(v);
+    };
+    const out = [];
+    for (let idx = 0; idx < allRows.length; idx++) {
+      const r = allRows[idx];
+      const now = r.date;
+      const v = r[inst.name];
+      if (v == null || !(Number(v) > 0.5 && Number(v) < 40)) continue;
+      const ytm = Number(v);
+      const N = (mat - now) / YR_MS;
+      if (N <= H + 0.02) continue;                 // must be able to hold the full horizon
+      const cr = benchVal(r);
+      if (cr == null) continue;
+      const curve = curveAt(instruments, r, now);
+      if (curve.length < 2) continue;
+      const spread = ytm - interp(curve, N);
+      const yRoll = interp(curve, N - H) + spread;
+      const price = bondPV(ytm, N, c);
+      const couponRet = (c * H / price) * 100;
+      const cashRet = cr * H;
+      const beBps = breakevenReprice(yRoll, N, c, couponRet, price, cashRet, H);
+      // What actually happened over the next H years (nearest row to now + H).
+      let actChange = null, actExcess = null;
+      const target = now.getTime() + H * YR_MS;
+      let best = null, bestDiff = Infinity;
+      for (let j = idx + 1; j < allRows.length; j++) {
+        const tj = allRows[j].date.getTime();
+        const diff = Math.abs(tj - target);
+        if (diff < bestDiff) { bestDiff = diff; best = allRows[j]; }
+        if (tj > target + 0.6 * H * YR_MS) break;
+      }
+      if (best) {
+        const yrsAfter = (best.date - now) / YR_MS;
+        if (yrsAfter >= 0.75 * H && yrsAfter <= 1.5 * H) {
+          const fv = best[inst.name];
+          if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) {
+            const fY = Number(fv);
+            actChange = (fY - ytm) * 100;
+            const actTR = couponRet + (bondPV(fY, N - H, c) / price - 1) * 100;
+            actExcess = actTR - cashRet;
+          }
+        }
+      }
+      out.push({
+        t: now.getTime(),
+        breakeven: +beBps.toFixed(1),
+        actChange: actChange == null ? null : +actChange.toFixed(1),
+        actExcess: actExcess == null ? null : +actExcess.toFixed(3),
+      });
+    }
+    return out;
+  }, [showBeChart, effectiveBeBond, instruments, allRows, cashRate, horizon, bench, callRate]);
+
+  const fmtAxisDate = (ms) => new Date(ms).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' });
 
   // Government yield curve points (incl. sub-1y) as at the selected date.
   const curvePoints = useMemo(() => {
@@ -502,6 +632,65 @@ export default function SAGovBonds({ data, instruments }) {
             <p style={{ fontSize: 11, color: '#475569', margin: '8px 2px 0' }}>
               Nominal govie YTMs by years to maturity (blue line), as at {latest.dateStr}.{corpCurvePoints.length > 0 ? ' Rose diamonds = corporate/SOE bonds you added — the gap above the line is their credit spread.' : ''}{cashRate > 0 ? ` Dashed line = ${benchLabel} (${cashRate?.toFixed(2)}%).` : ''} Drag the bottom‑right corner to resize.
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* Breakeven vs actual — full history for one bond */}
+      <div style={{ marginTop: 16, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ cursor: 'pointer' }} onClick={() => setShowBeChart(v => !v)}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+              Breakeven vs actual <span style={{ color: '#64748b', fontWeight: 400 }}>· history ({hLbl} horizon, {benchLabel})</span>
+            </h3>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {showBeChart && (
+              <select value={effectiveBeBond} onChange={e => setBeChartBond(e.target.value)}
+                style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', minWidth: 120 }}>
+                {beBondOptions.map(o => <option key={o.name} value={o.name}>{o.label}{o.isCorp ? ' · corp' : ''}</option>)}
+              </select>
+            )}
+            <button onClick={() => setShowBeChart(v => !v)}
+              style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, cursor: 'pointer',
+                border: '1px solid #334155', background: '#0f172a', color: '#94a3b8' }}>
+              {showBeChart ? '▾ Minimise' : '▸ Show'}
+            </button>
+          </div>
+        </div>
+        {showBeChart && (
+          <div style={{ marginTop: 12 }}>
+            {beHistory.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#64748b' }}>Not enough history for {beBondLabel} at this horizon.</p>
+            ) : (
+              <>
+                <ResizableChart height={360}>
+                  <ComposedChart data={beHistory} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
+                    <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                      tickFormatter={fmtAxisDate} tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569" minTickGap={40} />
+                    <YAxis yAxisId="bps" tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569" width={48}
+                      tickFormatter={v => `${v}`}
+                      label={{ value: 'bps', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11 }} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fill: '#4ade80', fontSize: 11 }} stroke="#4ade80" width={52}
+                      tickFormatter={v => `${v.toFixed(1)}%`}
+                      label={{ value: 'actual excess (%)', angle: 90, position: 'insideRight', fill: '#4ade80', fontSize: 11 }} />
+                    <Tooltip content={<BeHistTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <ReferenceLine yAxisId="bps" y={0} stroke="#475569" />
+                    <Line yAxisId="pct" type="monotone" dataKey="actExcess" name="Actual excess vs cash (%, right)"
+                      stroke="#4ade80" strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
+                    <Line yAxisId="bps" type="monotone" dataKey="breakeven" name="Breakeven cushion (bps)"
+                      stroke="#fbbf24" strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <Line yAxisId="bps" type="monotone" dataKey="actChange" name="Actual Δyield (bps)"
+                      stroke="#38bdf8" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+                  </ComposedChart>
+                </ResizableChart>
+                <p style={{ fontSize: 12, color: '#cbd5e1', margin: '10px 2px 0', lineHeight: 1.5 }}>
+                  For <strong>{beBondLabel}</strong>, every day in our history: the <strong style={{ color: '#fbbf24' }}>breakeven cushion</strong> (how far its yield could rise over the next {hLbl} before underperforming {benchLabel}) vs the <strong style={{ color: '#38bdf8' }}>actual Δyield</strong> that then occurred. <strong>When blue sits below amber, the cushion held and the bond beat cash</strong> — quantified by <strong style={{ color: '#4ade80' }}>actual excess</strong> on the right axis (green above 0 = it won). Both yield lines are in bps; the two {`Δyield/excess`} lines stop ~{hLbl} before today (no future data yet). Uses the current <strong>horizon</strong> and <strong>benchmark</strong> buttons above, and each day's actual historical YTMs (not your manual overrides).
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
