@@ -320,7 +320,7 @@ export default function SAGovBonds({ data, instruments }) {
   // so you get an unbroken history (a real bond's maturity shrinks over time).
   const isCm = (v) => typeof v === 'string' && v.startsWith('CM:');
   const beCmOptions = useMemo(
-    () => [5, 10, 20, 30].filter(t => t > horizon + 0.5).map(t => ({ value: `CM:${t}`, label: `${t}y constant maturity` })),
+    () => [2, 5, 10, 20, 30].filter(t => t > horizon + 0.5).map(t => ({ value: `CM:${t}`, label: `${t}y constant maturity` })),
     [horizon]
   );
 
