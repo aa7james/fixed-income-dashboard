@@ -105,6 +105,7 @@ function buildCurve(row) {
 export default function USYieldCurve({ data }) {
   const yb = useYAxisBounds();
   const [selectedPresets, setSelectedPresets] = useState([]);
+  const [compareDate, setCompareDate] = useState(''); // specific date to compare against (ISO)
   const [tenorRange, setTenorRange] = useState('Full Curve');
   const dataRows = useMemo(() => data?.dataRows || [], [data]);
   const latest = dataRows.length ? dataRows[dataRows.length - 1] : null;
@@ -120,9 +121,22 @@ export default function USYieldCurve({ data }) {
     }).filter(Boolean);
   }, [selectedPresets, dataRows, latest]);
 
+  // A specific calendar date to compare against, snapped to the nearest day we have.
+  const compareRow = useMemo(
+    () => (compareDate ? nearestRow(dataRows, new Date(compareDate)) : null),
+    [compareDate, dataRows]
+  );
+
+  // All comparison rows = the relative presets plus the specific date (if any).
+  const allCompareRows = useMemo(() => {
+    const arr = [...comparisonRows];
+    if (compareRow && !arr.some(r => r.dateStr === compareRow.dateStr)) arr.push(compareRow);
+    return arr;
+  }, [comparisonRows, compareRow]);
+
   const series = useMemo(() => {
     if (!latest) return [];
-    const rows = [latest, ...comparisonRows];
+    const rows = [latest, ...allCompareRows];
     const single = rows.length === 1;
     return rows.map((row, i) => ({
       key: row.dateStr + i,
@@ -131,13 +145,13 @@ export default function USYieldCurve({ data }) {
       data: buildCurve(row),
       showLabel: single,
     })).filter(s => s.data.length > 0);
-  }, [latest, comparisonRows]);
+  }, [latest, allCompareRows]);
 
   // Spread bar chart: current minus the first selected comparison date
   const spreadData = useMemo(() => {
-    if (!latest || comparisonRows.length === 0) return [];
+    if (!latest || allCompareRows.length === 0) return [];
     const curMap = Object.fromEntries(buildCurve(latest).map(p => [p.name, p]));
-    const compMap = Object.fromEntries(buildCurve(comparisonRows[0]).map(p => [p.name, p.y]));
+    const compMap = Object.fromEntries(buildCurve(allCompareRows[0]).map(p => [p.name, p.y]));
     const bars = [];
     for (const p of Object.values(curMap)) {
       const compY = compMap[p.name];
@@ -146,7 +160,7 @@ export default function USYieldCurve({ data }) {
     }
     bars.sort((a, b) => a.x - b.x);
     return bars;
-  }, [latest, comparisonRows]);
+  }, [latest, allCompareRows]);
 
   // Apply the tenor-range filter to both curve series and the spread bars
   const filteredSeries = series
@@ -213,7 +227,36 @@ export default function USYieldCurve({ data }) {
               </button>
             );
           })}
+          <span style={{ width: 1, height: 18, background: '#334155', margin: '0 4px', alignSelf: 'center' }} />
+          <span style={{ fontSize: 11, color: '#64748b', alignSelf: 'center' }}>or date:</span>
+          <input
+            type="date"
+            value={compareDate}
+            min={dataRows[0]?.dateStr}
+            max={latest?.dateStr}
+            onChange={e => setCompareDate(e.target.value)}
+            title="Compare the curve against a specific date (snaps to the nearest day we have data for)"
+            style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, cursor: 'pointer',
+              border: `1px solid ${compareRow ? DATE_COLORS[(allCompareRows.indexOf(compareRow) + 1) % DATE_COLORS.length] : '#334155'}`,
+              background: compareRow ? (DATE_COLORS[(allCompareRows.indexOf(compareRow) + 1) % DATE_COLORS.length] + '22') : 'transparent',
+              color: compareRow ? DATE_COLORS[(allCompareRows.indexOf(compareRow) + 1) % DATE_COLORS.length] : '#94a3b8',
+            }}
+          />
+          {compareDate && (
+            <button
+              onClick={() => setCompareDate('')}
+              title="Clear the specific date"
+              style={{ fontSize: 13, lineHeight: 1, padding: '0 4px', borderRadius: 8, cursor: 'pointer', border: '1px solid #334155', background: 'transparent', color: '#f87171' }}
+            >×</button>
+          )}
         </div>
+        {compareRow && (
+          <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
+            <span style={{ color: DATE_COLORS[(allCompareRows.indexOf(compareRow) + 1) % DATE_COLORS.length] }}>● chosen date</span>
+            {' → '}{fmtDate(compareRow.dateStr)}
+          </div>
+        )}
       </div>
 
       <div className={styles.chartWrap}>
@@ -264,7 +307,7 @@ export default function USYieldCurve({ data }) {
       {filteredSpread.length > 0 && (
         <div className={styles.chartWrap} style={{ marginTop: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
-            Spread vs {selectedPresets[0]} — change in yield (bps)
+            Spread vs {selectedPresets[0] || (compareRow ? fmtDate(compareRow.dateStr) : '')} — change in yield (bps)
             <span style={{ fontSize: 11, fontWeight: 400, color: '#475569', marginLeft: 8 }}>
               positive = yields rose · negative = yields fell
             </span>
