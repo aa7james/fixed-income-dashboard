@@ -151,6 +151,11 @@ export default function SAGovBonds({ data, instruments }) {
   // Breakeven-history chart: which bond, and whether the (compute-heavy) section is open.
   const [showBeChart, setShowBeChart] = useState(false);
   const [beChartBond, setBeChartBond] = useState('');
+  // Manual axis bounds for the breakeven-history chart (blank = auto).
+  const [beBpsMin, setBeBpsMin] = useState('');
+  const [beBpsMax, setBeBpsMax] = useState('');
+  const [bePctMin, setBePctMin] = useState('');
+  const [bePctMax, setBePctMax] = useState('');
 
   // the data row on or before the selected as-of date (rows are sorted ascending)
   const latest = useMemo(() => {
@@ -664,15 +669,40 @@ export default function SAGovBonds({ data, instruments }) {
               <p style={{ fontSize: 12, color: '#64748b' }}>Not enough history for {beBondLabel} at this horizon.</p>
             ) : (
               <>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <span style={{ fontSize: 12, color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    Left axis (bps):
+                    <input type="number" placeholder="min" value={beBpsMin} onChange={e => setBeBpsMin(e.target.value)}
+                      style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+                    <span style={{ color: '#475569' }}>–</span>
+                    <input type="number" placeholder="max" value={beBpsMax} onChange={e => setBeBpsMax(e.target.value)}
+                      style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+                  </span>
+                  <span style={{ fontSize: 12, color: '#4ade80', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    Right axis (%):
+                    <input type="number" placeholder="min" value={bePctMin} onChange={e => setBePctMin(e.target.value)}
+                      style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+                    <span style={{ color: '#475569' }}>–</span>
+                    <input type="number" placeholder="max" value={bePctMax} onChange={e => setBePctMax(e.target.value)}
+                      style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0' }} />
+                  </span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>blank = auto</span>
+                  {(beBpsMin || beBpsMax || bePctMin || bePctMax) && (
+                    <button onClick={() => { setBeBpsMin(''); setBeBpsMax(''); setBePctMin(''); setBePctMax(''); }}
+                      style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, cursor: 'pointer', border: '1px solid #334155', background: '#0f172a', color: '#94a3b8' }}>Reset axes</button>
+                  )}
+                </div>
                 <ResizableChart height={360}>
                   <ComposedChart data={beHistory} margin={{ top: 10, right: 16, bottom: 24, left: 8 }}>
                     <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
                     <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']}
                       tickFormatter={fmtAxisDate} tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569" minTickGap={40} />
                     <YAxis yAxisId="bps" tick={{ fill: '#94a3b8', fontSize: 11 }} stroke="#475569" width={48}
+                      allowDataOverflow domain={[beBpsMin !== '' ? +beBpsMin : 'auto', beBpsMax !== '' ? +beBpsMax : 'auto']}
                       tickFormatter={v => `${v}`}
                       label={{ value: 'bps', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11 }} />
                     <YAxis yAxisId="pct" orientation="right" tick={{ fill: '#4ade80', fontSize: 11 }} stroke="#4ade80" width={52}
+                      allowDataOverflow domain={[bePctMin !== '' ? +bePctMin : 'auto', bePctMax !== '' ? +bePctMax : 'auto']}
                       tickFormatter={v => `${v.toFixed(1)}%`}
                       label={{ value: 'actual excess (%)', angle: 90, position: 'insideRight', fill: '#4ade80', fontSize: 11 }} />
                     <Tooltip content={<BeHistTooltip />} />
