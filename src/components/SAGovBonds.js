@@ -138,6 +138,24 @@ export default function SAGovBonds({ data, instruments }) {
   const addCorp = () => { if (pickCorp && !addedCorp.includes(pickCorp)) saveCorp([...addedCorp, pickCorp]); setPickCorp(''); };
   const removeCorp = (nm) => saveCorp(addedCorp.filter(n => n !== nm));
 
+  // Custom bonds the user typed in by hand (not in the data feed), persisted.
+  // Each: { id, label, couponPct, maturity (ISO), ytm }.
+  const [customBonds, setCustomBonds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('saGovBondsCustom')) || []; } catch { return []; }
+  });
+  const saveCustom = (arr) => { setCustomBonds(arr); try { localStorage.setItem('saGovBondsCustom', JSON.stringify(arr)); } catch { /* ignore */ } };
+  const [cf, setCf] = useState({ label: '', couponPct: '', maturity: '', ytm: '' });
+  const cfValid = cf.label.trim() && cf.maturity && isFinite(parseFloat(cf.couponPct)) && isFinite(parseFloat(cf.ytm));
+  const addCustom = () => {
+    if (!cfValid) return;
+    const label = cf.label.trim();
+    const id = `custom:${label}:${cf.maturity}`;
+    if (customBonds.some(b => b.id === id)) return;
+    saveCustom([...customBonds, { id, label, couponPct: parseFloat(cf.couponPct), maturity: cf.maturity, ytm: parseFloat(cf.ytm) }]);
+    setCf({ label: '', couponPct: '', maturity: '', ytm: '' });
+  };
+  const removeCustom = (id) => saveCustom(customBonds.filter(b => b.id !== id));
+
   // Manual YTM overrides (per bond, persisted). For illiquid lines the Bloomberg/BVAL
   // pull can sit well off the last traded level — type your own and it drives every column.
   const [ytmOvr, setYtmOvr] = useState(() => {
@@ -222,8 +240,19 @@ export default function SAGovBonds({ data, instruments }) {
     const curve = govies.map(g => ({ N: g.N, y: g.ytm })).sort((a, b) => a.N - b.N);
     // Corporate/SOE bonds the user added — priced off the SAME govie curve, keeping their spread.
     const corps = instruments.filter(i => addedCorp.includes(i.name) && valid(i)).map(i => mk(i, true));
+    // Hand-entered custom bonds — priced off the same govie curve, keeping their spread.
+    const customs = customBonds.map(cb => {
+      const ov = hasOvr(cb.id);
+      const pulled = Number(cb.ytm);
+      return {
+        name: cb.id, label: cb.label, isCorp: true, custom: true,
+        c: Number(cb.couponPct), maturity: cb.maturity,
+        N: (new Date(cb.maturity) - now) / (1000 * 3600 * 24 * 365),
+        ytm: ov ? Number(ytmOvr[cb.id]) : pulled, pulledYtm: pulled, ytmOvr: ov,
+      };
+    }).filter(g => isFinite(g.N) && g.N > 0 && isFinite(g.ytm) && isFinite(g.c));
 
-    return [...govies, ...corps]
+    return [...govies, ...corps, ...customs]
       .filter(g => htm ? g.N > 0.02 : g.N > horizon + 0.02) // in HTM mode keep everything still alive
       .map(g => {
         const H = htm ? g.N : horizon;              // hold-to-maturity: each bond held to its own maturity
@@ -264,7 +293,7 @@ export default function SAGovBonds({ data, instruments }) {
         };
       })
       .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
-  }, [latest, instruments, cashRate, futureRow, addedCorp, ytmOvr, horizon, htm]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [latest, instruments, cashRate, futureRow, addedCorp, customBonds, ytmOvr, horizon, htm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasActual = !!futureRow;
 
@@ -407,17 +436,29 @@ export default function SAGovBonds({ data, instruments }) {
       .filter(p => p.mat > 0).sort((a, b) => a.mat - b.mat);
   }, [latest, instruments, addedCorp, ytmOvr]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hand-entered custom bonds as curve points (plotted like corporates).
+  const customCurvePoints = useMemo(() => {
+    if (!latest) return [];
+    const now = latest.date;
+    return customBonds.map(cb => ({
+      mat: (new Date(cb.maturity) - now) / (1000 * 3600 * 24 * 365),
+      ytm: hasOvr(cb.id) ? Number(ytmOvr[cb.id]) : Number(cb.ytm), label: cb.label,
+    })).filter(p => p.mat > 0 && isFinite(p.ytm)).sort((a, b) => a.mat - b.mat);
+  }, [latest, customBonds, ytmOvr]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // One combined dataset so the tooltip resolves by whichever point is under the cursor.
   const chartData = useMemo(() => ([
     ...curvePoints.map(p => ({ mat: p.mat, label: p.label, ytm: p.ytm, yGov: p.ytm })),
     ...corpCurvePoints.map(p => ({ mat: p.mat, label: p.label, ytm: p.ytm, yCorp: p.ytm, isCorp: true })),
-  ].sort((a, b) => a.mat - b.mat)), [curvePoints, corpCurvePoints]);
+    ...customCurvePoints.map(p => ({ mat: p.mat, label: p.label, ytm: p.ytm, yCorp: p.ytm, isCorp: true })),
+  ].sort((a, b) => a.mat - b.mat)), [curvePoints, corpCurvePoints, customCurvePoints]);
 
   // Clean y-axis: domain rounded out to 0.25% with evenly-spaced ticks (0.10% when narrow).
   const curveY = useMemo(() => {
     if (!curvePoints.length) return { domain: ['auto', 'auto'], ticks: undefined };
     const ys = curvePoints.map(p => p.ytm)
       .concat(corpCurvePoints.map(p => p.ytm))
+      .concat(customCurvePoints.map(p => p.ytm))
       .concat(cashRate != null && cashRate > 0 ? [cashRate] : []);
     const lo = Math.floor((Math.min(...ys) - 0.1) * 4) / 4;
     const hi = Math.ceil((Math.max(...ys) + 0.1) * 4) / 4;
@@ -427,7 +468,7 @@ export default function SAGovBonds({ data, instruments }) {
     const ticks = [];
     for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(2));
     return { domain: [lo, hi], ticks };
-  }, [curvePoints, corpCurvePoints, cashRate]);
+  }, [curvePoints, corpCurvePoints, customCurvePoints, cashRate]);
 
   if (!latest) return <div style={{ color: '#64748b' }}>No data available.</div>;
 
@@ -522,6 +563,30 @@ export default function SAGovBonds({ data, instruments }) {
         {corpOptions.length === 0 && <span style={{ fontSize: 11, color: '#64748b' }}>No corporate bonds loaded — add them in the Instruments tab first.</span>}
       </div>
 
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Add your own bond:</span>
+        <input value={cf.label} onChange={e => setCf({ ...cf, label: e.target.value })} placeholder="Name"
+          style={{ width: 90, fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }} />
+        <span style={{ fontSize: 12, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          <input type="number" step="0.01" value={cf.couponPct} onChange={e => setCf({ ...cf, couponPct: e.target.value })} placeholder="Coupon"
+            style={{ width: 70, fontSize: 12, padding: '5px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }} />%
+        </span>
+        <span style={{ fontSize: 12, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          matures
+          <input type="date" value={cf.maturity} onChange={e => setCf({ ...cf, maturity: e.target.value })}
+            style={{ fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }} />
+        </span>
+        <span style={{ fontSize: 12, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          YTM
+          <input type="number" step="0.01" value={cf.ytm} onChange={e => setCf({ ...cf, ytm: e.target.value })} placeholder="YTM"
+            style={{ width: 64, fontSize: 12, padding: '5px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0' }} />%
+        </span>
+        <button onClick={addCustom} disabled={!cfValid}
+          style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: cfValid ? 'pointer' : 'default',
+            border: 'none', background: cfValid ? '#0ea5e9' : '#334155', color: '#fff', opacity: cfValid ? 1 : 0.6 }}>+ Add</button>
+        <span style={{ fontSize: 11, color: '#64748b' }}>priced off the govie curve, keeping its spread</span>
+      </div>
+
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#e2e8f0' }}>
@@ -549,7 +614,9 @@ export default function SAGovBonds({ data, instruments }) {
               {rows.map(r => (
                 <tr key={r.label} style={{ borderTop: '1px solid #0f172a' }}>
                   <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: r.isCorp ? '#fb7185' : undefined }}>
-                    {r.label}{r.isCorp && <span style={{ color: '#fda4af', fontSize: 11, fontWeight: 400 }}> · corp</span>}
+                    {r.label}{r.isCorp && <span style={{ color: '#fda4af', fontSize: 11, fontWeight: 400 }}> · {r.custom ? 'custom' : 'corp'}</span>}
+                    {r.custom && <button onClick={() => removeCustom(r.name)} title="Remove this custom bond"
+                      style={{ background: 'none', border: 'none', color: '#fb7185', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 0 0 6px' }}>×</button>}
                   </td>
                   <td style={cell({ color: '#94a3b8' })}>{r.c.toFixed(2)}%</td>
                   <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
@@ -655,7 +722,7 @@ export default function SAGovBonds({ data, instruments }) {
                   dot={{ r: 3, fill: '#38bdf8' }} activeDot={{ r: 5 }} isAnimationActive={false}>
                   <LabelList dataKey="label" content={(p) => <PointLabel {...p} fill="#7dd3fc" dy={-10} />} />
                 </Line>
-                {corpCurvePoints.length > 0 && (
+                {(corpCurvePoints.length > 0 || customCurvePoints.length > 0) && (
                   <Scatter dataKey="yCorp" fill="#fb7185" shape="diamond" isAnimationActive={false}>
                     <LabelList dataKey="label" content={(p) => <PointLabel {...p} fill="#fda4af" dy={16} />} />
                   </Scatter>
