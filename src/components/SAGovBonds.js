@@ -287,15 +287,27 @@ export default function SAGovBonds({ data, instruments }) {
     return (r2032 || beBondOptions.find(o => o.N >= 5) || beBondOptions[0]).name;
   }, [beBondOptions]);
 
-  const effectiveBeBond = (beChartBond && beBondOptions.some(o => o.name === beChartBond)) ? beChartBond : defaultBeBond;
-  const beBondLabel = (beBondOptions.find(o => o.name === effectiveBeBond) || {}).label || effectiveBeBond;
+  // Constant-maturity tenors: synthetic par bonds read straight off the curve each day,
+  // so you get an unbroken history (a real bond's maturity shrinks over time).
+  const isCm = (v) => typeof v === 'string' && v.startsWith('CM:');
+  const beCmOptions = useMemo(
+    () => [5, 10, 20, 30].filter(t => t > horizon + 0.5).map(t => ({ value: `CM:${t}`, label: `${t}y constant maturity` })),
+    [horizon]
+  );
+
+  const effectiveBeBond = (beChartBond && (isCm(beChartBond) || beBondOptions.some(o => o.name === beChartBond)))
+    ? beChartBond : defaultBeBond;
+  const beBondLabel = isCm(effectiveBeBond)
+    ? `${effectiveBeBond.slice(3)}y constant maturity`
+    : ((beBondOptions.find(o => o.name === effectiveBeBond) || {}).label || effectiveBeBond);
 
   const beHistory = useMemo(() => {
     if (!showBeChart || !effectiveBeBond || !instruments?.length || !allRows.length || cashRate == null) return [];
-    const inst = instruments.find(i => i.name === effectiveBeBond);
-    if (!inst || inst.coupon == null || !inst.maturity_date) return [];
-    const c = Number(inst.coupon) * 100;
-    const mat = new Date(inst.maturity_date);
+    const cm = isCm(effectiveBeBond) ? Number(effectiveBeBond.slice(3)) : null;
+    const inst = cm ? null : instruments.find(i => i.name === effectiveBeBond);
+    if (!cm && (!inst || inst.coupon == null || !inst.maturity_date)) return [];
+    const instC = inst ? Number(inst.coupon) * 100 : null;
+    const mat = inst ? new Date(inst.maturity_date) : null;
     const H = horizon;
     const benchVal = (r) => {
       if (bench === 'Zero') return 0;
@@ -303,20 +315,31 @@ export default function SAGovBonds({ data, instruments }) {
       const v = bench === 'NCD' ? r['12m Fixed Rate NCD'] : r['12m T-Bill'];
       return v == null ? null : Number(v);
     };
+    // Yield of the position (bond or constant-maturity point) on a given row, given its
+    // remaining life n; for constant maturity it's a par bond read off that day's curve.
+    const yieldOnRow = (r, n) => {
+      if (cm) {
+        const cv = curveAt(instruments, r, r.date);
+        if (cv.length < 2 || cv[cv.length - 1].N < n - 3) return null; // need the curve to reach it
+        return interp(cv, n);
+      }
+      const v = r[inst.name];
+      return (v != null && Number(v) > 0.5 && Number(v) < 40) ? Number(v) : null;
+    };
     const out = [];
     for (let idx = 0; idx < allRows.length; idx++) {
       const r = allRows[idx];
       const now = r.date;
-      const v = r[inst.name];
-      if (v == null || !(Number(v) > 0.5 && Number(v) < 40)) continue;
-      const ytm = Number(v);
-      const N = (mat - now) / YR_MS;
+      const N = cm ? cm : (mat - now) / YR_MS;
       if (N <= H + 0.02) continue;                 // must be able to hold the full horizon
+      const ytm = yieldOnRow(r, N);
+      if (ytm == null) continue;
       const cr = benchVal(r);
       if (cr == null) continue;
       const curve = curveAt(instruments, r, now);
       if (curve.length < 2) continue;
-      const spread = ytm - interp(curve, N);
+      const c = cm ? ytm : instC;                  // constant maturity = par bond (coupon = its yield)
+      const spread = cm ? 0 : ytm - interp(curve, N);
       const yRoll = interp(curve, N - H) + spread;
       const price = bondPV(ytm, N, c);
       const couponRet = (c * H / price) * 100;
@@ -335,9 +358,8 @@ export default function SAGovBonds({ data, instruments }) {
       if (best) {
         const yrsAfter = (best.date - now) / YR_MS;
         if (yrsAfter >= 0.75 * H && yrsAfter <= 1.5 * H) {
-          const fv = best[inst.name];
-          if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) {
-            const fY = Number(fv);
+          const fY = yieldOnRow(best, N - H);      // same position, now aged by H years
+          if (fY != null) {
             actChange = (fY - ytm) * 100;
             const actTR = couponRet + (bondPV(fY, N - H, c) / price - 1) * 100;
             actExcess = actTR - cashRet;
@@ -352,7 +374,7 @@ export default function SAGovBonds({ data, instruments }) {
       });
     }
     return out;
-  }, [showBeChart, effectiveBeBond, instruments, allRows, cashRate, horizon, bench, callRate]);
+  }, [showBeChart, effectiveBeBond, instruments, allRows, cashRate, horizon, bench, callRate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmtAxisDate = (ms) => new Date(ms).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' });
 
@@ -657,7 +679,14 @@ export default function SAGovBonds({ data, instruments }) {
             {showBeChart && (
               <select value={effectiveBeBond} onChange={e => setBeChartBond(e.target.value)}
                 style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', minWidth: 120 }}>
-                {beBondOptions.map(o => <option key={o.name} value={o.name}>{o.label}{o.isCorp ? ' · corp' : ''}</option>)}
+                {beCmOptions.length > 0 && (
+                  <optgroup label="Constant maturity">
+                    {beCmOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </optgroup>
+                )}
+                <optgroup label="Specific bonds">
+                  {beBondOptions.map(o => <option key={o.name} value={o.name}>{o.label}{o.isCorp ? ' · corp' : ''}</option>)}
+                </optgroup>
               </select>
             )}
             <button onClick={() => setShowBeChart(v => !v)}
