@@ -248,10 +248,13 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     : (savedPrefs.tenorRange || 'Full Curve');
   const initPresets = packMode && packConfig ? (packConfig.selectedPresets || [])
     : (savedPrefs.selectedPresets || []);
+  const initCompareDate = packMode && packConfig ? (packConfig.compareDate || '')
+    : (savedPrefs.compareDate || '');
 
   const [activeCategories, setActiveCategories] = useState(initCategories);
   const [tenorRange, setTenorRange] = useState(initTenor);
   const [selectedPresets, setSelectedPresets] = useState(initPresets);
+  const [compareDate, setCompareDate] = useState(initCompareDate); // specific date to compare against (ISO)
 
   const initShowCash = packMode && packConfig ? (packConfig.showCash !== false) : (savedPrefs.showCash !== false);
   const [showCash, setShowCash] = useState(initShowCash);
@@ -295,16 +298,29 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     }).filter(Boolean);
   }, [selectedPresets, data.dataRows, latest]);
 
+  // A specific calendar date to compare against, snapped to the nearest day we actually have.
+  const compareDateResolved = useMemo(
+    () => (compareDate ? nearestDate(data.dataRows, new Date(compareDate)) : null),
+    [compareDate, data.dataRows]
+  );
+
+  // All comparison dates = the relative presets plus the specific date (if any).
+  const allCompareDates = useMemo(() => {
+    const arr = [...comparisonDates];
+    if (compareDateResolved && !arr.includes(compareDateResolved)) arr.push(compareDateResolved);
+    return arr;
+  }, [comparisonDates, compareDateResolved]);
+
   const selectedDates = useMemo(() => {
-    const dates = [latest?.dateStr, ...comparisonDates].filter(Boolean);
+    const dates = [latest?.dateStr, ...allCompareDates].filter(Boolean);
     return [...new Set(dates)];
-  }, [latest, comparisonDates]);
+  }, [latest, allCompareDates]);
 
   // Save prefs to localStorage whenever they change
   useEffect(() => {
     if (packMode) return;
-    savePrefs({ activeCategories, tenorRange, selectedPresets, showCash });
-  }, [activeCategories, tenorRange, selectedPresets, showCash, packMode]);
+    savePrefs({ activeCategories, tenorRange, selectedPresets, showCash, compareDate });
+  }, [activeCategories, tenorRange, selectedPresets, showCash, compareDate, packMode]);
 
   const togglePreset = (label) => {
     setSelectedPresets(prev =>
@@ -388,8 +404,8 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
   // Spread chart data — compare latest vs first comparison date
   const spreadData = useMemo(() => {
-    if (comparisonDates.length === 0 || !latest) return [];
-    const compDateStr = comparisonDates[0];
+    if (allCompareDates.length === 0 || !latest) return [];
+    const compDateStr = allCompareDates[0];
     const currentRow = data.dataRows.find(r => r.dateStr === latest.dateStr);
     const compRow = data.dataRows.find(r => r.dateStr === compDateStr);
     if (!currentRow || !compRow) return [];
@@ -413,7 +429,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
 
     bars.sort((a, b) => a.x - b.x);
     return bars;
-  }, [comparisonDates, latest, data.dataRows, activeCategories, instruments]);
+  }, [allCompareDates, latest, data.dataRows, activeCategories, instruments]);
 
   return (
     <div>
@@ -434,6 +450,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
               tenorRange,
               selectedPresets,
               showCash,
+              compareDate,
             })}
             style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
           >
@@ -505,8 +522,31 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                 </button>
               );
             })}
+            <span style={{ width: 1, height: 18, background: '#334155', margin: '0 4px', alignSelf: 'center' }} />
+            <span style={{ fontSize: 11, color: '#64748b', alignSelf: 'center' }}>or date:</span>
+            <input
+              type="date"
+              value={compareDate}
+              min={data.dataRows[0]?.dateStr}
+              max={latest?.dateStr}
+              onChange={e => setCompareDate(e.target.value)}
+              title="Compare the curve against a specific date (snaps to the nearest day we have data for)"
+              style={{
+                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, cursor: 'pointer',
+                border: `1px solid ${compareDate ? DATE_COLORS[selectedDates.indexOf(compareDateResolved) % DATE_COLORS.length] : '#334155'}`,
+                background: compareDate ? (DATE_COLORS[selectedDates.indexOf(compareDateResolved) % DATE_COLORS.length] + '22') : 'transparent',
+                color: compareDate ? DATE_COLORS[selectedDates.indexOf(compareDateResolved) % DATE_COLORS.length] : '#94a3b8',
+              }}
+            />
+            {compareDate && (
+              <button
+                onClick={() => setCompareDate('')}
+                title="Clear the specific date"
+                style={{ fontSize: 13, lineHeight: 1, padding: '0 4px', borderRadius: 8, cursor: 'pointer', border: '1px solid #334155', background: 'transparent', color: '#f87171' }}
+              >×</button>
+            )}
           </div>
-          {selectedPresets.length > 0 && (
+          {(selectedPresets.length > 0 || compareDateResolved) && (
             <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
               {selectedPresets.map((label, i) => {
                 const resolved = comparisonDates[i];
@@ -517,6 +557,12 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                   </span>
                 ) : null;
               })}
+              {compareDateResolved && (
+                <span style={{ marginRight: 12 }}>
+                  <span style={{ color: DATE_COLORS[selectedDates.indexOf(compareDateResolved) % DATE_COLORS.length] }}>● chosen date</span>
+                  {' → '}{fmtDate(compareDateResolved)}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -637,7 +683,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
       {spreadData.length > 0 && (
         <div className={styles.chartWrap} style={{ marginTop: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
-            Spread vs {selectedPresets[0]} — change in yield (bps)
+            Spread vs {selectedPresets[0] || (compareDateResolved ? fmtDate(compareDateResolved) : '')} — change in yield (bps)
             <span style={{ fontSize: 11, fontWeight: 400, color: '#475569', marginLeft: 8 }}>
               positive = yields rose · negative = yields fell
             </span>
