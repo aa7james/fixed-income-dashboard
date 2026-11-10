@@ -258,7 +258,7 @@ export default function SAGovBonds({ data, instruments }) {
           }
         }
         return {
-          ...g, mod, modH: atMat ? 0 : modDuration(g.ytm, g.N - H, g.c), atMat, H, cashRet,
+          ...g, mod, modH: atMat ? 0 : modDuration(g.ytm, g.N - H, g.c), atMat, H, cashRet, price,
           yRoll, rollBps: atMat ? null : rollDown * 100, spreadBps: spread * 100, couponRet, rollRet, totalRet, excess, beBps,
           actChange, actTR, actExcess,
         };
@@ -531,6 +531,7 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Coupon</th>
                 <th style={cell()}>Maturity</th>
                 <th style={cell()}>YTM</th>
+                <th style={cell()}>Price</th>
                 <th style={cell()}>Spread vs govt</th>
                 <th style={cell()}>Mod. dur.</th>
                 <th style={cell()}>Mod. dur. @ horizon</th>
@@ -567,6 +568,7 @@ export default function SAGovBonds({ data, instruments }) {
                         style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>↺</button>}
                     </span>
                   </td>
+                  <td style={cell({ color: '#94a3b8' })} title="All-in (dirty) price per 100 nominal — the capital the returns are based on">{r.price.toFixed(2)}</td>
                   <td style={cell({ fontWeight: 600, color: r.isCorp ? (r.spreadBps >= 0 ? '#fb7185' : '#4ade80') : '#475569' })}>
                     {r.isCorp ? `${r.spreadBps >= 0 ? '+' : ''}${Math.round(r.spreadBps)}` : '—'}
                   </td>
