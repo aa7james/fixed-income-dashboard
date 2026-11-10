@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList, Legend } from 'recharts';
 import ResizableChart from './ResizableChart';
 import { fmtTenor, tenorTicks } from './axisFormat';
@@ -151,11 +151,15 @@ export default function SAGovBonds({ data, instruments }) {
   // Breakeven-history chart: which bond, and whether the (compute-heavy) section is open.
   const [showBeChart, setShowBeChart] = useState(false);
   const [beChartBond, setBeChartBond] = useState('');
-  // Manual axis bounds for the breakeven-history chart (blank = auto).
-  const [beBpsMin, setBeBpsMin] = useState('');
-  const [beBpsMax, setBeBpsMax] = useState('');
-  const [bePctMin, setBePctMin] = useState('');
-  const [bePctMax, setBePctMax] = useState('');
+  // Manual axis bounds for the breakeven-history chart (blank = auto), persisted.
+  const beAxes0 = useMemo(() => { try { return JSON.parse(localStorage.getItem('saGovBondsBeAxes')) || {}; } catch { return {}; } }, []);
+  const [beBpsMin, setBeBpsMin] = useState(beAxes0.beBpsMin ?? '');
+  const [beBpsMax, setBeBpsMax] = useState(beAxes0.beBpsMax ?? '');
+  const [bePctMin, setBePctMin] = useState(beAxes0.bePctMin ?? '');
+  const [bePctMax, setBePctMax] = useState(beAxes0.bePctMax ?? '');
+  useEffect(() => {
+    try { localStorage.setItem('saGovBondsBeAxes', JSON.stringify({ beBpsMin, beBpsMax, bePctMin, bePctMax })); } catch { /* ignore */ }
+  }, [beBpsMin, beBpsMax, bePctMin, bePctMax]);
 
   // the data row on or before the selected as-of date (rows are sorted ascending)
   const latest = useMemo(() => {
