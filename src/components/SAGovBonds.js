@@ -73,6 +73,12 @@ function breakevenReprice(yRoll, N, c, couponRet, P0, cashTarget, H) {
 
 // Government yield curve ({N, y}) as at a given row's date, measured from `now`.
 const YR_MS = 365 * 24 * 3600 * 1000;
+// Bloomberg generic (constant-tenor) SA government benchmarks, pulled into bond_data by instrument name.
+// These carry no fixed coupon/maturity — modelled as a par bond at the stated tenor off the real generic yield.
+const SA_GENERICS = [
+  { name: 'SA Generic 2 Year', tenor: 2, label: 'SA 2y generic' },
+  { name: 'SA Generic 5 Year', tenor: 5, label: 'SA 5y generic' },
+];
 function curveAt(instruments, row, now) {
   const pts = [];
   for (const i of instruments) {
@@ -254,8 +260,20 @@ export default function SAGovBonds({ data, instruments }) {
         ytm: ov ? Number(ytmOvr[cb.id]) : pulled, pulledYtm: pulled, ytmOvr: ov,
       };
     }).filter(g => isFinite(g.N) && g.N > 0 && isFinite(g.ytm) && isFinite(g.c));
+    // Bloomberg generic benchmarks — constant-tenor par bonds read off the real generic yield each day.
+    const generics = SA_GENERICS.map(gd => {
+      const raw = latest[gd.name];
+      if (raw == null || !(Number(raw) > 0.5 && Number(raw) < 40)) return null;
+      const pulled = Number(raw);
+      const ov = hasOvr(gd.name);
+      return {
+        name: gd.name, label: gd.label, isCorp: false, generic: true, tenor: gd.tenor,
+        c: pulled, maturity: null, N: gd.tenor,
+        ytm: ov ? Number(ytmOvr[gd.name]) : pulled, pulledYtm: pulled, ytmOvr: ov,
+      };
+    }).filter(Boolean);
 
-    return [...govies, ...corps, ...customs]
+    return [...govies, ...corps, ...customs, ...generics]
       .filter(g => htm ? g.N > 0.02 : g.N > horizon + 0.02) // in HTM mode keep everything still alive
       .map(g => {
         const H = htm ? g.N : horizon;              // hold-to-maturity: each bond held to its own maturity
@@ -281,9 +299,17 @@ export default function SAGovBonds({ data, instruments }) {
         // Realised: what actually happened to the yield (only meaningful when sold before maturity)
         let actChange = null, actTR = null, actExcess = null;
         if (futureRow && !atMat) {
-          const fv = futureRow[g.name];
-          if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) {
-            const fY = Number(fv);
+          // Real bond: its own yield H years on (it has naturally aged). Generic: the position rolled
+          // from N to N−H, so read the aged yield off the future R-bond curve, keeping its spread.
+          let fY = null;
+          if (g.generic) {
+            const fc = curveAt(instruments, futureRow, futureRow.date);
+            if (fc.length >= 2 && fc[fc.length - 1].N >= (g.N - H) - 3) fY = interp(fc, g.N - H) + spread;
+          } else {
+            const fv = futureRow[g.name];
+            if (fv != null && Number(fv) > 0.5 && Number(fv) < 40) fY = Number(fv);
+          }
+          if (fY != null) {
             actChange = (fY - g.ytm) * 100;                           // actual yield move (bps)
             actTR = couponRet + (bondPV(fY, g.N - H, g.c) / price - 1) * 100; // realised total return (%)
             actExcess = actTR - cashRet;                             // realised edge over the benchmark (%)
@@ -295,7 +321,11 @@ export default function SAGovBonds({ data, instruments }) {
           actChange, actTR, actExcess,
         };
       })
-      .sort((a, b) => new Date(a.maturity) - new Date(b.maturity));
+      .sort((a, b) => {
+        const da = a.generic ? now.getTime() + a.N * YR_MS : new Date(a.maturity).getTime();
+        const db = b.generic ? now.getTime() + b.N * YR_MS : new Date(b.maturity).getTime();
+        return da - db;
+      });
   }, [latest, instruments, cashRate, futureRow, addedCorp, customBonds, ytmOvr, horizon, htm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasActual = !!futureRow;
@@ -322,22 +352,32 @@ export default function SAGovBonds({ data, instruments }) {
   // Constant-maturity tenors: synthetic par bonds read straight off the curve each day,
   // so you get an unbroken history (a real bond's maturity shrinks over time).
   const isCm = (v) => typeof v === 'string' && v.startsWith('CM:');
+  const isGen = (v) => typeof v === 'string' && v.startsWith('GEN:');
   const beCmOptions = useMemo(
     () => [2, 5, 10, 20, 30].filter(t => t > horizon + 0.5).map(t => ({ value: `CM:${t}`, label: `${t}y constant maturity` })),
     [horizon]
   );
+  // Real Bloomberg generic benchmarks that have data and are longer than the horizon.
+  const beGenOptions = useMemo(
+    () => SA_GENERICS.filter(g => latest && latest[g.name] != null && g.tenor > horizon + 0.5)
+      .map(g => ({ value: `GEN:${g.name}`, label: g.label })),
+    [latest, horizon]
+  );
 
-  const effectiveBeBond = (beChartBond && (isCm(beChartBond) || beBondOptions.some(o => o.name === beChartBond)))
+  const effectiveBeBond = (beChartBond && (isCm(beChartBond) || isGen(beChartBond) || beBondOptions.some(o => o.name === beChartBond)))
     ? beChartBond : defaultBeBond;
   const beBondLabel = isCm(effectiveBeBond)
     ? `${effectiveBeBond.slice(3)}y constant maturity`
+    : isGen(effectiveBeBond)
+    ? ((SA_GENERICS.find(g => `GEN:${g.name}` === effectiveBeBond) || {}).label || effectiveBeBond)
     : ((beBondOptions.find(o => o.name === effectiveBeBond) || {}).label || effectiveBeBond);
 
   const beHistory = useMemo(() => {
     if (!showBeChart || !effectiveBeBond || !instruments?.length || !allRows.length || cashRate == null) return [];
     const cm = isCm(effectiveBeBond) ? Number(effectiveBeBond.slice(3)) : null;
-    const inst = cm ? null : instruments.find(i => i.name === effectiveBeBond);
-    if (!cm && (!inst || inst.coupon == null || !inst.maturity_date)) return [];
+    const gen = isGen(effectiveBeBond) ? SA_GENERICS.find(g => `GEN:${g.name}` === effectiveBeBond) : null;
+    const inst = (cm || gen) ? null : instruments.find(i => i.name === effectiveBeBond);
+    if (!cm && !gen && (!inst || inst.coupon == null || !inst.maturity_date)) return [];
     const instC = inst ? Number(inst.coupon) * 100 : null;
     const mat = inst ? new Date(inst.maturity_date) : null;
     const H = horizon;
@@ -364,16 +404,18 @@ export default function SAGovBonds({ data, instruments }) {
     for (let idx = 0; idx < allRows.length; idx++) {
       const r = allRows[idx];
       const now = r.date;
-      const N = cm ? cm : (mat - now) / YR_MS;
+      const N = cm ? cm : gen ? gen.tenor : (mat - now) / YR_MS;
       if (N <= H + 0.02) continue;                 // must be able to hold the full horizon
-      const ytm = yieldOnRow(r, N);
+      let ytm;
+      if (gen) { const gv = r[gen.name]; ytm = (gv != null && Number(gv) > 0.5 && Number(gv) < 40) ? Number(gv) : null; }
+      else ytm = yieldOnRow(r, N);
       if (ytm == null) continue;
       const cr = benchVal(r);
       if (cr == null) continue;
       const curve = curveAt(instruments, r, now);
       if (curve.length < 2) continue;
-      const c = cm ? ytm : instC;                  // constant maturity = par bond (coupon = its yield)
-      const spread = cm ? 0 : ytm - interp(curve, N);
+      const c = (cm || gen) ? ytm : instC;         // constant maturity / generic = par bond (coupon = its yield)
+      const spread = cm ? 0 : ytm - interp(curve, N); // generic keeps its spread over the R-bond curve
       const yRoll = interp(curve, N - H) + spread;
       const price = bondPV(ytm, N, c);
       const couponRet = (c * H / price) * 100;
@@ -392,7 +434,11 @@ export default function SAGovBonds({ data, instruments }) {
       if (best) {
         const yrsAfter = (best.date - now) / YR_MS;
         if (yrsAfter >= 0.75 * H && yrsAfter <= 1.5 * H) {
-          const fY = yieldOnRow(best, N - H);      // same position, now aged by H years
+          let fY;
+          if (cm || gen) {                          // aged position: read N−H off the future curve, keep spread
+            const fc = curveAt(instruments, best, best.date);
+            fY = (fc.length >= 2 && fc[fc.length - 1].N >= (N - H) - 3) ? interp(fc, N - H) + spread : null;
+          } else fY = yieldOnRow(best, N - H);       // real bond: its own yield, now aged by H years
           if (fY != null) {
             actChange = (fY - ytm) * 100;
             const actTR = couponRet + (bondPV(fY, N - H, c) / price - 1) * 100;
@@ -639,13 +685,16 @@ export default function SAGovBonds({ data, instruments }) {
             <tbody>
               {rows.map(r => (
                 <tr key={r.label} style={{ borderTop: '1px solid #0f172a' }}>
-                  <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: r.isCorp ? '#fb7185' : undefined }}>
+                  <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: r.isCorp ? '#fb7185' : r.generic ? '#38bdf8' : undefined }}>
                     {r.label}{r.isCorp && <span style={{ color: '#fda4af', fontSize: 11, fontWeight: 400 }}> · {r.custom ? 'custom' : 'corp'}</span>}
+                    {r.generic && <span style={{ color: '#7dd3fc', fontSize: 11, fontWeight: 400 }}> · generic</span>}
                     {r.custom && <button onClick={() => removeCustom(r.name)} title="Remove this custom bond"
                       style={{ background: 'none', border: 'none', color: '#fb7185', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 0 0 6px' }}>×</button>}
                   </td>
-                  <td style={cell({ color: '#94a3b8' })}>{r.c.toFixed(2)}%</td>
-                  <td style={cell({ color: '#94a3b8' })}>{r.maturity}</td>
+                  <td style={cell({ color: '#94a3b8' })} title={r.generic ? 'Par coupon assumed = the generic benchmark yield' : undefined}>{r.c.toFixed(2)}%</td>
+                  <td style={cell({ color: '#94a3b8' })}>{r.generic
+                    ? <span style={{ color: '#64748b' }} title="Rolling benchmark — always this tenor, no fixed maturity">{r.tenor}y · rolling</span>
+                    : r.maturity}</td>
                   <td style={cell()}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                       <input type="text" inputMode="decimal"
@@ -774,6 +823,11 @@ export default function SAGovBonds({ data, instruments }) {
             {showBeChart && (
               <select value={effectiveBeBond} onChange={e => setBeChartBond(e.target.value)}
                 style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', minWidth: 120 }}>
+                {beGenOptions.length > 0 && (
+                  <optgroup label="Generic benchmarks">
+                    {beGenOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </optgroup>
+                )}
                 {beCmOptions.length > 0 && (
                   <optgroup label="Constant maturity">
                     {beCmOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
