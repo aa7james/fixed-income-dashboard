@@ -112,6 +112,7 @@ const BeHistTooltip = ({ active, payload, label }) => {
 export default function SAGovBonds({ data, instruments }) {
   const [bench, setBench] = useState('NCD'); // 'NCD' | 'T-Bill' | 'Call' | 'Zero'
   const [callRate, setCallRate] = useState('7.10'); // editable call-account rate (%)
+  const [rateOvr, setRateOvr] = useState(''); // manual override of the 1y benchmark rate (blank = use the pulled rate)
   const [showCurve, setShowCurve] = useState(true);
   const allRows = useMemo(() => data?.dataRows || [], [data]);
   const minISO = allRows.length ? iso(allRows[0].date) : '';
@@ -198,10 +199,12 @@ export default function SAGovBonds({ data, instruments }) {
   const cashRate = useMemo(() => {
     if (bench === 'Zero') return 0;
     if (bench === 'Call') { const n = parseFloat(callRate); return isNaN(n) ? null : n; }
+    const ov = parseFloat(rateOvr);
+    if (rateOvr !== '' && isFinite(ov)) return ov;   // manual 1y-rate override takes priority
     if (!latest) return null;
     const v = bench === 'NCD' ? latest['12m Fixed Rate NCD'] : latest['12m T-Bill'];
     return v == null ? null : Number(v);
-  }, [latest, bench, callRate]);
+  }, [latest, bench, callRate, rateOvr]);
 
   const benchLabel = bench === 'NCD' ? '1y NCD' : bench === 'T-Bill' ? '1y T-Bill'
     : bench === 'Call' ? 'Call' : '0% (breakeven)';
@@ -341,6 +344,8 @@ export default function SAGovBonds({ data, instruments }) {
     const benchVal = (r) => {
       if (bench === 'Zero') return 0;
       if (bench === 'Call') { const n = parseFloat(callRate); return isNaN(n) ? null : n; }
+      const ov = parseFloat(rateOvr);
+      if (rateOvr !== '' && isFinite(ov)) return ov;   // manual 1y-rate override, applied flat across history
       const v = bench === 'NCD' ? r['12m Fixed Rate NCD'] : r['12m T-Bill'];
       return v == null ? null : Number(v);
     };
@@ -403,7 +408,7 @@ export default function SAGovBonds({ data, instruments }) {
       });
     }
     return out;
-  }, [showBeChart, effectiveBeBond, instruments, allRows, cashRate, horizon, bench, callRate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showBeChart, effectiveBeBond, instruments, allRows, cashRate, horizon, bench, callRate, rateOvr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmtAxisDate = (ms) => new Date(ms).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' });
 
@@ -513,8 +518,29 @@ export default function SAGovBonds({ data, instruments }) {
               style={{ width: 70, fontSize: 12, padding: '4px 6px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }} />%
           </span>
         )}
-        <span style={{ fontSize: 13, color: '#cbd5e1' }}>
-          {benchLabel} = <strong style={{ color: '#38bdf8' }}>{cashRate != null ? cashRate.toFixed(2) : '—'}%</strong>
+        <span style={{ fontSize: 13, color: '#cbd5e1', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {benchLabel} =
+          {(bench === 'NCD' || bench === 'T-Bill') ? (
+            <>
+              <input type="text" inputMode="decimal"
+                value={rateOvr !== '' ? rateOvr : (cashRate != null ? cashRate.toFixed(2) : '')}
+                onChange={e => { const v = e.target.value; if (v === '' || /^[0-9]*\.?[0-9]*$/.test(v)) setRateOvr(v); }}
+                onFocus={e => e.target.select()}
+                title="Type to set the 1-year benchmark rate yourself; clear (or ↺) to use the live pulled rate"
+                style={{ width: 58, fontSize: 13, fontWeight: 700, padding: '3px 6px', borderRadius: 8, textAlign: 'right',
+                  border: `1px solid ${rateOvr !== '' ? '#b45309' : '#475569'}`, background: '#0f172a',
+                  color: rateOvr !== '' ? '#fbbf24' : '#38bdf8', fontVariantNumeric: 'tabular-nums', cursor: 'text' }} />
+              <span>%</span>
+              {rateOvr !== '' && (
+                <button onClick={() => setRateOvr('')}
+                  title={`Reset to live ${benchLabel} (${latest ? Number(bench === 'NCD' ? latest['12m Fixed Rate NCD'] : latest['12m T-Bill']).toFixed(2) : '—'}%)`}
+                  style={{ fontSize: 12, lineHeight: 1, padding: '2px 6px', borderRadius: 8, cursor: 'pointer',
+                    border: '1px solid #334155', background: '#1e293b', color: '#fbbf24' }}>↺ live</button>
+              )}
+            </>
+          ) : (
+            <strong style={{ color: '#38bdf8' }}>{cashRate != null ? cashRate.toFixed(2) : '—'}%</strong>
+          )}
           {!htm && horizon !== 1 && cashHz != null && <span style={{ color: '#64748b' }}> · {hLbl} cash ≈ {cashHz.toFixed(2)}%</span>}
           {htm && <span style={{ color: '#64748b' }}> · rolled per bond to its maturity</span>}
         </span>
