@@ -22,11 +22,15 @@ const COMPARISONS = [
   { key: 'y1',       label: '1 Year Ago',  days: 365, color: '#4ade80', dash: '5 3' },
 ];
 
-function nearestRow(dataRows, targetDate) {
+// Nearest row to the target date that also satisfies `predicate` (e.g. actually has
+// T-Bill + NCD data). The DB has near-daily bond rows but T-Bills only print ~weekly,
+// so without the predicate a snapshot can land on a day with no T-Bill value and show blank.
+function nearestRow(dataRows, targetDate, predicate) {
   if (!dataRows.length) return null;
   const target = targetDate.getTime();
   let best = null, bestDiff = Infinity;
   for (const row of dataRows) {
+    if (predicate && !predicate(row)) continue;
     const diff = Math.abs(row.date.getTime() - target);
     if (diff < bestDiff) { bestDiff = diff; best = row; }
   }
@@ -41,10 +45,15 @@ export default function TBillPremiumChart({ data, onTogglePack, isInPack }) {
     if (!latest) return [];
     const latestMs = latest.date.getTime();
 
+    // A row is usable only if a premium can actually be computed from it.
+    const hasPremium = (row) => TENORS.some(t => row[t.tbill] != null && row[t.ncd] != null);
+
     const rowsByComparison = Object.fromEntries(
       COMPARISONS.map(c => [
         c.key,
-        c.days === 0 ? latest : nearestRow(dataRows, new Date(latestMs - c.days * 24 * 3600 * 1000)),
+        c.days === 0
+          ? (hasPremium(latest) ? latest : nearestRow(dataRows, latest.date, hasPremium))
+          : nearestRow(dataRows, new Date(latestMs - c.days * 24 * 3600 * 1000), hasPremium),
       ])
     );
 

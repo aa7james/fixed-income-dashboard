@@ -431,6 +431,12 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
     return bars;
   }, [allCompareDates, latest, data.dataRows, activeCategories, instruments]);
 
+  // Cash reference levels (MM/Call) are NOMINAL money-market rates — they only make sense
+  // against a nominal curve, not against inflation-linked (real) yields. Hide them when the
+  // only active category is Inflation Linked.
+  const nominalActive = Object.keys(activeCategories).some(c => c !== 'Inflation Linked' && activeCategories[c]);
+  const cashApplies = showCash && markers.length > 0 && nominalActive;
+
   return (
     <div>
       {!packMode && (
@@ -625,7 +631,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
             )}
           </div>
           <ResizableChart width="100%" height={600}>
-            <ScatterChart margin={{ top: 16, right: 24, left: showCash && markers.length ? 96 : 0, bottom: 24 }}>
+            <ScatterChart margin={{ top: 16, right: 24, left: cashApplies ? 96 : 0, bottom: 24 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#334155" strokeOpacity={0.8} />
               <XAxis
                 dataKey="x"
@@ -662,7 +668,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
                   shape={<CustomDot fill={s.color} />}
                 />
               ))}
-              {showCash && markers.map(m => {
+              {cashApplies && markers.map(m => {
                 const v = Number(m.value);
                 if (isNaN(v)) return null;
                 const txt = `${m.label || 'Ref'}: ${v.toFixed(2)}%`;
