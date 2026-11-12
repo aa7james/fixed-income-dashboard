@@ -260,20 +260,7 @@ export default function SAGovBonds({ data, instruments }) {
         ytm: ov ? Number(ytmOvr[cb.id]) : pulled, pulledYtm: pulled, ytmOvr: ov,
       };
     }).filter(g => isFinite(g.N) && g.N > 0 && isFinite(g.ytm) && isFinite(g.c));
-    // Bloomberg generic benchmarks — constant-tenor par bonds read off the real generic yield each day.
-    const generics = SA_GENERICS.map(gd => {
-      const raw = latest[gd.name];
-      if (raw == null || !(Number(raw) > 0.5 && Number(raw) < 40)) return null;
-      const pulled = Number(raw);
-      const ov = hasOvr(gd.name);
-      return {
-        name: gd.name, label: gd.label, isCorp: false, generic: true, tenor: gd.tenor,
-        c: pulled, maturity: null, N: gd.tenor,
-        ytm: ov ? Number(ytmOvr[gd.name]) : pulled, pulledYtm: pulled, ytmOvr: ov,
-      };
-    }).filter(Boolean);
-
-    return [...govies, ...corps, ...customs, ...generics]
+    return [...govies, ...corps, ...customs]
       .filter(g => htm ? g.N > 0.02 : g.N > horizon + 0.02) // in HTM mode keep everything still alive
       .map(g => {
         const H = htm ? g.N : horizon;              // hold-to-maturity: each bond held to its own maturity
