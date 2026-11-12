@@ -233,7 +233,7 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
         if (10 <= pts[k].x) { const a = pts[k - 1], b = pts[k]; sa10 = a.y + (10 - a.x) / (b.x - a.x) * (b.y - a.y); break; }
       }
     }
-    const us = Number(latest['US 10Y Treasury']);
+    const us = Number(latest['US 10Y Treasury'] ?? latest['US Generic 10 year']);
     const us10 = (isFinite(us) && us > 0.2 && us < 40) ? us : null;
     return { sa10, us10 };
   }, [latest, instruments]);

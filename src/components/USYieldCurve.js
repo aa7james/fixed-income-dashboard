@@ -17,6 +17,13 @@ const US_TENORS = {
   'US 10Y Treasury': 10, 'US 20Y Treasury': 20, 'US 30Y Treasury': 30,
 };
 
+// Some benchmarks are stored under a sibling instrument name carrying the same
+// Bloomberg series (identical ticker). If the primary key is blank in a row, fall
+// back to the sibling so the point never drops off the curve.
+const US_FALLBACKS = {
+  'US 10Y Treasury': 'US Generic 10 year', // both = USGG10YR Index
+};
+
 const COMPARISON_PRESETS = [
   { label: '1W ago',  days: 7   },
   { label: '1M ago',  days: 30  },
@@ -94,7 +101,8 @@ function fmtDate(s) {
 function buildCurve(row) {
   const pts = [];
   for (const [name, tenor] of Object.entries(US_TENORS)) {
-    const y = row?.[name];
+    let y = row?.[name];
+    if (y == null && US_FALLBACKS[name]) y = row?.[US_FALLBACKS[name]];
     if (y == null) continue;
     pts.push({ x: tenor, y: +y.toFixed(2), tenorLabel: fmtTenor(tenor), name });
   }
