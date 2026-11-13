@@ -268,22 +268,41 @@ export default function AlbiIndex({ data, instruments }) {
   const [selDate, setSelDate] = useState('');
   const sel = snapshots.find(s => s.date === selDate) || snapshots[snapshots.length - 1];
 
-  // Nearest data row on or before a given ISO date (for historical yields).
-  const rowByDate = (iso) => {
+  // How many of a snapshot's constituents a given yield row can actually price.
+  const pricedCount = (constituents, yieldRow) => {
+    if (!yieldRow) return 0;
+    const ok = {};
+    (instruments || []).forEach(i => {
+      const v = yieldRow[i.name];
+      if (i.display_label && v != null && Number(v) > 0.2 && Number(v) < 40) ok[i.display_label] = true;
+    });
+    return constituents.reduce((a, r) => a + (ok[r[0]] ? 1 : 0), 0);
+  };
+
+  // Nearest data row on or before a given ISO date that actually prices at least
+  // half the constituents. This skips one-off bad pull days (sparse govie yields)
+  // that would otherwise crater the index metrics for that month. Falls back to the
+  // latest row on/before the date if none qualify.
+  const priceableRow = (iso, constituents) => {
     if (!dataRows.length) return null;
-    let best = dataRows[0];
-    for (const r of dataRows) { if (isoOf(r.date) <= iso) best = r; else break; }
-    return best;
+    const need = Math.max(1, Math.floor((constituents?.length || 0) / 2));
+    let latest = null, lastGood = null;
+    for (const r of dataRows) {
+      if (isoOf(r.date) > iso) break;      // dataRows are sorted ascending
+      latest = r;
+      if (pricedCount(constituents, r) >= need) lastGood = r;
+    }
+    return lastGood || latest;
   };
 
   const { rows, chartRows, metrics, anyProxy } = useMemo(() => {
     if (!sel) return { rows: [], chartRows: [], metrics: null, anyProxy: false };
-    return computeIndex(sel.rows, rowByDate(sel.date), sel.date, instruments);
+    return computeIndex(sel.rows, priceableRow(sel.date, sel.rows), sel.date, instruments);
   }, [sel, dataRows, instruments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Metric time-series across every monthly snapshot (priced at each date).
   const series = useMemo(() => snapshots.map(s => {
-    const m = computeIndex(s.rows, rowByDate(s.date), s.date, instruments).metrics;
+    const m = computeIndex(s.rows, priceableRow(s.date, s.rows), s.date, instruments).metrics;
     return { date: s.date, modDur: +m.modDur.toFixed(2), term: +m.term.toFixed(2), ytm: +m.ytm.toFixed(2), convexity: +m.convexity.toFixed(1) };
   }), [snapshots, dataRows, instruments]); // eslint-disable-line react-hooks/exhaustive-deps
 
