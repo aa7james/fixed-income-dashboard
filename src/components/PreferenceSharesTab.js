@@ -14,23 +14,26 @@ const PREF_META = {
   SBKP:   { issuer: 'Standard Bank 6.5%',    pctPrime: null, note: 'fixed 6.5%' },
   AFEP:   { issuer: 'AECI',                  pctPrime: null, note: 'fixed 5.5%' },
   // Everything else: use Bloomberg's indicated (forward) dividend yield.
+  // (Issuer names below are Bloomberg's own security names.)
   GNDP:   { issuer: 'Grindrod',              pctPrime: null },
-  INPPR:  { issuer: 'Investec plc',          pctPrime: null },
+  INPPR:  { issuer: 'Investec Ltd',          pctPrime: null },
+  INPP:   { issuer: 'Investec plc',          pctPrime: null },
   FSRP:   { issuer: 'FirstRand',             pctPrime: null },
-  INPP:   { issuer: 'Investec',              pctPrime: null },
   INPMAU: { issuer: 'Investec Bank Mauritius', pctPrime: null },
   SUMIRF: { issuer: 'Summit Issuer RF',      pctPrime: null },
   IBEX:   { issuer: 'Ibex (ex-Steinhoff)',   pctPrime: null },
   CATP:   { issuer: 'Caxton & CTP',          pctPrime: null },
-  TFGP:   { issuer: 'The Foschini Group',    pctPrime: null },
-  NPKP:   { issuer: 'Nampak',                pctPrime: null },
-  NPP1:   { issuer: '(unconfirmed)',         pctPrime: null },
-  AOVP:   { issuer: 'Afrox',                 pctPrime: null },
   BAWP:   { issuer: 'Barloworld',            pctPrime: null },
   GRSP:   { issuer: '(unconfirmed)',         pctPrime: null },
-  RTOP:   { issuer: '(unconfirmed)',         pctPrime: null },
-  IMRP11: { issuer: 'Imperial (redeemable)', pctPrime: null },
-  IMRP14: { issuer: 'Imperial (redeemable)', pctPrime: null },
+  IMRP11: { issuer: 'Investec Bank Mauritius', pctPrime: null },
+  IMRP14: { issuer: 'Investec Bank Mauritius', pctPrime: null },
+  // Legacy low-par, thinly-traded fixed-rate prefs (tiny issues). Yields are real
+  // arithmetic but on micro/illiquid shares — not comparable to the bank prefs above.
+  TFGP:   { issuer: 'Foschini 6.5%',         pctPrime: null, note: 'thinly traded' },
+  NPKP:   { issuer: 'Nampak 6%',             pctPrime: null, note: 'thinly traded' },
+  NPP1:   { issuer: 'Nampak 6.5%',           pctPrime: null, note: 'thinly traded' },
+  AOVP:   { issuer: 'African & Overseas 6%', pctPrime: null, note: 'thinly traded' },
+  RTOP:   { issuer: 'Rex Trueform',          pctPrime: null, note: 'thinly traded' },
 };
 
 const DWT = 0.20;
