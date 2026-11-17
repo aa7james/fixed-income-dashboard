@@ -325,7 +325,7 @@ export default function AlbiIndex({ data, instruments }) {
   const yld = niceTicks(Math.min(...yAll) - 0.3, Math.max(...yAll) + 0.3);
   const wMax = Math.max(...chartRows.map(r => r.wt));
   const wTicks = niceTicks(0, wMax);
-  const pricedRow = rowByDate(sel.date);
+  const pricedRow = priceableRow(sel.date, sel.rows);
   const pricedStr = pricedRow ? pricedRow.dateStr : latest.dateStr;
   // Historical metrics chart scales
   const durTicks = niceTicks(Math.min(...series.map(s => Math.min(s.modDur, s.term))) - 0.5, Math.max(...series.map(s => Math.max(s.modDur, s.term))) + 0.5);
