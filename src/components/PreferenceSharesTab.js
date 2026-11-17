@@ -6,15 +6,18 @@ import React, { useMemo, useState } from 'react';
 //  par       = nominal value in Rand the % of prime applies to (default 100)
 const PREF_META = {
   // Fixed-income / financial preferreds (prime-linked, R100 par)
+  // Prime-linked (Bloomberg returns no dividend for these — use % of prime). Rates from
+  // James's Bloomberg pref-yield workbook. NTCP verified against the declaration maths.
   NTCP:   { issuer: 'Netcare',               pctPrime: 82.5, verified: true },
-  DSBP:   { issuer: 'Discovery',             pctPrime: 100,  verified: true },
-  GNDP:   { issuer: 'Grindrod',              pctPrime: 88.0 },
-  INPPR:  { issuer: 'Investec plc',          pctPrime: 95.0 },
-  INPR:   { issuer: 'Investec Ltd',          pctPrime: 77.8 },
-  SBPP:   { issuer: 'Standard Bank',         pctPrime: 77.0 },
-  CPIP:   { issuer: 'Capitec',               pctPrime: 83.3 },
-  FSRP:   { issuer: 'FirstRand',             pctPrime: 75.6 },
+  SBPP:   { issuer: 'Standard Bank',         pctPrime: 75.0, note: 'variable' },
+  INPR:   { issuer: 'Investec Ltd',          pctPrime: 70.0, note: 'variable' },
+  CPIP:   { issuer: 'Capitec',               pctPrime: 75.0, note: 'variable' },
   SBKP:   { issuer: 'Standard Bank 6.5%',    pctPrime: null, note: 'fixed 6.5%' },
+  // Equity-classified (Bloomberg returns an actual dividend — use Div12M ÷ price).
+  DSBP:   { issuer: 'Discovery',             pctPrime: null },
+  GNDP:   { issuer: 'Grindrod',              pctPrime: null },
+  INPPR:  { issuer: 'Investec plc',          pctPrime: null },
+  FSRP:   { issuer: 'FirstRand',             pctPrime: null },
   AFEP:   { issuer: 'AECI',                  pctPrime: null },
   INPP:   { issuer: 'Investec',              pctPrime: null },
   INPMAU: { issuer: 'Investec Bank Mauritius', pctPrime: null },
