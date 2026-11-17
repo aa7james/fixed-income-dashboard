@@ -16,9 +16,10 @@ import SAGovBonds from './components/SAGovBonds';
 import USGovBonds from './components/USGovBonds';
 import ILBonds from './components/ILBonds';
 import Portfolios from './components/Portfolios';
+import PreferenceSharesTab from './components/PreferenceSharesTab';
 import styles from './App.module.css';
 
-const TABS = ['Yield Curve', 'Cash', 'SA Govt Bonds', 'SA Linkers', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Portfolios', 'Investment Pack', 'Instruments', 'Latest Rates', 'US Govt Bonds'];
+const TABS = ['Yield Curve', 'Cash', 'SA Govt Bonds', 'SA Linkers', 'Preference Shares', 'Market Pricing', 'Chart Builder', 'My Charts', 'Model Portfolio', 'Portfolios', 'Investment Pack', 'Instruments', 'Latest Rates', 'US Govt Bonds'];
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -192,6 +193,7 @@ export default function App() {
             {activeTab === 'Portfolios'      && <Portfolios     data={data} instruments={instruments} />}
             {activeTab === 'SA Govt Bonds'   && <SAGovBonds     data={data} instruments={instruments} />}
             {activeTab === 'SA Linkers'      && <ILBonds        data={data} instruments={instruments} />}
+            {activeTab === 'Preference Shares' && <PreferenceSharesTab data={data} instruments={instruments} />}
             {activeTab === 'Investment Pack' && <InvestmentPack packItems={packItems} onTogglePack={togglePack} onReorder={reorderPack} onUpdateNote={updatePackNote} data={data} instruments={instruments} />}
             {activeTab === 'Instruments'     && <InstrumentsAdmin />}
           </main>

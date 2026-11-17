@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import InflationLinkedBonds from './InflationLinkedBonds';
-import PreferenceShares from './PreferenceShares';
 import YieldDrivers from './YieldDrivers';
 import USYieldCurve from './USYieldCurve';
 import USInflationLinked from './USInflationLinked';
@@ -729,8 +728,6 @@ export default function YieldCurve({ data, instruments, packItems = [], onToggle
             <AddToPackButton isInPack={isInPack?.('inflation-linked')} onToggle={() => onTogglePack('inflation-linked')} />
           </div>
           <InflationLinkedBonds />
-
-          <PreferenceShares data={data} instruments={instruments} />
 
           <USYieldCurve data={data} />
 
