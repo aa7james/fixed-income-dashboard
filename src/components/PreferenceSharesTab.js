@@ -49,10 +49,25 @@ const card = { background: '#0f172a', border: '1px solid #1e293b', borderRadius:
 const th = { padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' };
 const td = (extra = {}) => ({ padding: '8px 10px', fontSize: 13, color: '#e2e8f0', borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...extra });
 
+const LIQ_STORE_KEY = 'prefShareLiquidityNotes';
+const loadLiq = () => {
+  try { return JSON.parse(localStorage.getItem(LIQ_STORE_KEY)) || {}; } catch { return {}; }
+};
+
 export default function PreferenceSharesTab({ data, instruments }) {
   const [sortKey, setSortKey] = useState('yield');
+  const [liqNotes, setLiqNotes] = useState(loadLiq);
   const latest = data?.dataRows?.[data.dataRows.length - 1];
   const prime = latest ? num(latest[PRIME_KEY]) : null;
+
+  const setLiq = (code, text) => {
+    setLiqNotes(prev => {
+      const next = { ...prev, [code]: text };
+      if (!text) delete next[code];
+      try { localStorage.setItem(LIQ_STORE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   const rows = useMemo(() => {
     if (!latest) return [];
@@ -139,8 +154,8 @@ export default function PreferenceSharesTab({ data, instruments }) {
               <th style={{ ...th, textAlign: 'right' }}>Last dividend</th>
               <th style={{ ...th, textAlign: 'right' }}>Expected div/yr</th>
               <th style={{ ...th, textAlign: 'right' }}><SortBtn k="yield">Forward yield</SortBtn></th>
-              <th style={{ ...th, textAlign: 'right' }}>Net (20% DWT)</th>
               <th style={{ ...th, textAlign: 'left' }}>Basis</th>
+              <th style={{ ...th, textAlign: 'left' }}>Liquidity</th>
             </tr>
           </thead>
           <tbody>
@@ -156,8 +171,16 @@ export default function PreferenceSharesTab({ data, instruments }) {
                 <td style={td({ textAlign: 'right', color: '#94a3b8' })}>{fmtR(r.lastDivR)}</td>
                 <td style={td({ textAlign: 'right', color: '#e2e8f0', fontWeight: 600 })}>{fmtR(r.fwdDivR)}</td>
                 <td style={td({ textAlign: 'right', fontWeight: 700, color: r.fwdYield != null ? '#4ade80' : '#475569' })}>{fmtPct(r.fwdYield)}</td>
-                <td style={td({ textAlign: 'right', color: '#94a3b8' })}>{fmtPct(r.fwdYieldNet)}</td>
                 <td style={td({ color: '#64748b', fontSize: 11 })}>{r.basis ? basisLabel[r.basis] : '—'}</td>
+                <td style={td({ padding: '4px 10px' })}>
+                  <input
+                    type="text"
+                    value={liqNotes[r.code] || ''}
+                    onChange={e => setLiq(r.code, e.target.value)}
+                    placeholder="add note…"
+                    style={{ width: 150, background: '#0b1220', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '4px 8px', outline: 'none' }}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -169,7 +192,7 @@ export default function PreferenceSharesTab({ data, instruments }) {
         “Forward yield” is that ÷ price. <strong style={{ color: '#94a3b8' }}>% of prime</strong> basis: dividend = (% of prime × live prime) on R100 par — the current run-rate.
         <strong style={{ color: '#94a3b8' }}> Bloomberg indicated</strong> basis: Bloomberg’s indicated (forward) dividend annualised from the latest payment — used where the % of prime isn’t confirmed.
         A <span style={{ color: '#64748b' }}>*</span> marks a % not yet re-verified by me (Netcare and Discovery are verified).
-        Prices are Bloomberg PX_LAST; “Last dividend” is the most recent declared payment per share. Yields are gross, with the net column after 20% dividends tax.
+        Prices are Bloomberg PX_LAST; “Last dividend” is the most recent declared payment per share. Yields are gross of dividends tax.
       </p>
     </div>
   );
