@@ -9,10 +9,18 @@ import styles from './YieldCurve.module.css';
 import { useYAxisBounds, flatY } from './useYAxisBounds';
 import { makeDateFmt, dateSpanDays } from './axisFormat';
 
-const SA     = 'SA Generic 10 year';
-const US     = 'US 10Y Treasury';      // Bloomberg renamed the US 10y to this (~Aug 2026)
-const US_OLD = 'US Generic 10 year';   // older rows carry the US 10y under this name
 const YANK   = 'SOAF Yankee Bond';
+
+// SA local (ZAR) + US Treasury series name per tenor. The Yankee (USD) is a single
+// ~10y benchmark used as the currency/credit split point at every tenor.
+const TENORS = {
+  '2Y':  { sa: 'SA Generic 2 Year',                       us: 'US 2Y Treasury' },
+  '5Y':  { sa: 'SA Generic 5 Year',                       us: 'US 5Y Treasury' },
+  '10Y': { sa: 'SA Generic 10 year',                      us: 'US 10Y Treasury', usOld: 'US Generic 10 year' },
+  '20Y': { sa: 'SA Generic 20 Year Nominal Generic Bond', us: 'US 20Y Treasury' },
+  '30Y': { sa: 'SA Generic 30 Year Nominal Generic Bond', us: 'US 30Y Treasury' },
+};
+const TENOR_KEYS = ['2Y', '5Y', '10Y', '20Y', '30Y'];
 
 const PERIODS = ['1Y', '2Y', '5Y', 'ALL'];
 const CREDIT_COLOR   = '#fb923c'; // orange
@@ -42,14 +50,18 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-export default function RiskPremiumChart({ data, onTogglePack, isInPack, defaultPeriod = '2Y' }) {
+export default function RiskPremiumChart({ data, onTogglePack, isInPack, defaultPeriod = '2Y', defaultTenor = '10Y' }) {
   const [period, setPeriod] = useState(defaultPeriod);
+  const [tenor, setTenor] = useState(defaultTenor);
   const dataRows = useMemo(() => data?.dataRows || [], [data]);
 
   const chartData = useMemo(() => {
+    const t = TENORS[tenor] || TENORS['10Y'];
     const rows = filterByPeriod(dataRows, period);
     return rows.map(row => {
-      const sa = row[SA], us = row[US] ?? row[US_OLD], yank = row[YANK];
+      const sa = row[t.sa];
+      const us = row[t.us] ?? (t.usOld ? row[t.usOld] : null);
+      const yank = row[YANK];
       if (sa == null || us == null || yank == null) {
         return { dateStr: row.dateStr, currency: null, credit: null };
       }
@@ -59,7 +71,7 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
         credit:   +((yank - us) * 100).toFixed(2), // SA sovereign credit risk (USD)
       };
     });
-  }, [dataRows, period]);
+  }, [dataRows, period, tenor]);
 
   const hasAnyData = chartData.some(p => p.currency != null || p.credit != null);
   const yb = useYAxisBounds('Y-axis', flatY(chartData, ['dateStr']).concat((chartData || []).map(r => (Number(r.credit) || 0) + (Number(r.currency) || 0))));
@@ -74,10 +86,25 @@ export default function RiskPremiumChart({ data, onTogglePack, isInPack, default
             SA Risk Premium Decomposition (bps)
           </div>
           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-            Total premium of SA 10y over US 10y, split into currency risk (SA 10y − SOAF Yankee) and credit risk (SOAF Yankee − US 10y)
+            Total premium of SA {tenor.toLowerCase()} over US {tenor.toLowerCase()}, split into currency risk (SA {tenor.toLowerCase()} − SOAF Yankee) and credit risk (SOAF Yankee − US {tenor.toLowerCase()})
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginRight: 2 }}>Tenor</span>
+            {TENOR_KEYS.map(t => (
+              <button
+                key={t}
+                onClick={() => setTenor(t)}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 8, cursor: 'pointer',
+                  border: `1px solid ${tenor === t ? '#fb923c' : '#334155'}`,
+                  background: tenor === t ? 'rgba(251,146,60,0.15)' : 'transparent',
+                  color: tenor === t ? '#fb923c' : '#64748b',
+                }}
+              >{t}</button>
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: 4 }}>
             {PERIODS.map(p => (
               <button
