@@ -27,9 +27,15 @@ function filterByPeriod(dataRows, period, customFrom, customTo) {
   return dataRows.filter(r => r.date >= cutoff);
 }
 
+// Short gaps (public holidays, the odd missing print, month-apart series like
+// CPI) are bridged so the line stays continuous; anything longer is a REAL hole
+// in the data and is left broken, so the chart never draws a smooth line across
+// months or years of missing values.
+const MAX_BRIDGE_DAYS = 45;
+
 function buildChartData(dataRows, series, period, customFrom, customTo) {
   const rows = filterByPeriod(dataRows, period, customFrom, customTo);
-  return rows.map(row => {
+  const points = rows.map(row => {
     const point = { dateStr: row.dateStr };
     series.forEach(s => {
       if (s.type === 'spread') {
@@ -46,6 +52,23 @@ function buildChartData(dataRows, series, period, customFrom, customTo) {
     });
     return point;
   });
+
+  // Fill only the SHORT gaps; leave long holes as genuine breaks in the line.
+  series.forEach(s => {
+    const real = [];
+    points.forEach((p, i) => { if (p[s.key] != null) real.push(i); });
+    for (let r = 0; r < real.length - 1; r++) {
+      const i0 = real[r], i1 = real[r + 1];
+      if (i1 === i0 + 1) continue; // no gap between consecutive points
+      const gapDays = (new Date(points[i1].dateStr) - new Date(points[i0].dateStr)) / 86400000;
+      if (gapDays <= MAX_BRIDGE_DAYS) {
+        for (let i = i0 + 1; i < i1; i++) points[i][s.key] = points[i0][s.key];
+      }
+      // else: leave the interior nulls so the line breaks across the real hole
+    }
+  });
+
+  return points;
 }
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -338,7 +361,7 @@ export default function ChartBuilder({ data, instruments, onSaved }) {
                         stroke={s.color}
                         dot={false}
                         strokeWidth={2}
-                        connectNulls={true}
+                        connectNulls={false}
                         unit={` ${unit}`}
                       >
                         <LabelList

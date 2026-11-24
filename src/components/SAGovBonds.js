@@ -38,6 +38,17 @@ function bondPV(y, n, c) {
   return pv;
 }
 
+// Accrued interest per 100 face, semi-annual. The fraction of the current
+// coupon period already elapsed × the semi-annual coupon. n = years to
+// maturity (fractional ok). Clean price = dirty price − accrued.
+function accruedInt(n, c) {
+  if (n <= 0) return 0;
+  const tp = n * 2;                      // total semi-annual periods to maturity
+  const count = Math.ceil(tp - 1e-9);    // coupons remaining
+  const elapsed = count - tp;            // fraction of the current period already run (0..1)
+  return (c / 2) * elapsed;
+}
+
 // Linear interpolation of a {N, y} curve at x years.
 function interp(curve, x) {
   if (!curve.length) return null;
@@ -271,6 +282,7 @@ export default function SAGovBonds({ data, instruments }) {
         const rollDown = atMat ? null : g.ytm - yRoll;        // yield given up as it rolls (%-pts)
         const mod = modDuration(g.ytm, g.N, g.c);
         const price = bondPV(g.ytm, g.N, g.c);      // dirty price today = capital invested
+        const clean = price - accruedInt(g.N, g.c); // clean price = dirty − accrued interest
         const priceH = atMat ? 100 : bondPV(yRoll, g.N - H, g.c); // redeems at par, else repriced on unchanged curve
         // Coupon income / dirty price. Held to maturity, count the ACTUAL coupons paid (each c/2),
         // so the return reconciles to the YTM; the dirty price already carries the imminent/accrued
@@ -303,7 +315,7 @@ export default function SAGovBonds({ data, instruments }) {
           }
         }
         return {
-          ...g, mod, modH: atMat ? 0 : modDuration(g.ytm, g.N - H, g.c), atMat, H, cashRet, price,
+          ...g, mod, modH: atMat ? 0 : modDuration(g.ytm, g.N - H, g.c), atMat, H, cashRet, price, clean,
           yRoll, rollBps: atMat ? null : rollDown * 100, spreadBps: spread * 100, couponRet, rollRet, totalRet, excess, beBps,
           actChange, actTR, actExcess,
         };
@@ -655,7 +667,8 @@ export default function SAGovBonds({ data, instruments }) {
                 <th style={cell()}>Coupon</th>
                 <th style={cell()}>Maturity</th>
                 <th style={cell()}>YTM</th>
-                <th style={cell()}>Price</th>
+                <th style={cell()}>Clean price</th>
+                <th style={cell()}>Dirty price</th>
                 <th style={cell()}>Spread vs govt</th>
                 <th style={cell()}>Mod. dur.</th>
                 <th style={cell()}>Mod. dur. @ horizon</th>
@@ -697,6 +710,7 @@ export default function SAGovBonds({ data, instruments }) {
                         style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>↺</button>}
                     </span>
                   </td>
+                  <td style={cell({ color: '#94a3b8' })} title="Clean price per 100 nominal = dirty price − accrued interest (the quoted/traded price)">{r.clean.toFixed(2)}</td>
                   <td style={cell({ color: '#94a3b8' })} title="All-in (dirty) price per 100 nominal — the capital the returns are based on">{r.price.toFixed(2)}</td>
                   <td style={cell({ fontWeight: 600, color: r.isCorp ? (r.spreadBps >= 0 ? '#fb7185' : '#4ade80') : '#475569' })}>
                     {r.isCorp ? `${r.spreadBps >= 0 ? '+' : ''}${Math.round(r.spreadBps)}` : '—'}
